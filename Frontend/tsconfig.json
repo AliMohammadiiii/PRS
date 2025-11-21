@@ -1,0 +1,53 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
+    "strictNullChecks": true,
+
+    /* Path mapping */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./client/*"],
+      "@shared/*": ["./shared/*"],
+      "src/*": ["./*"]
+    }
+  },
+  "include": [
+    "client/**/*",
+    "server/**/*",
+    "shared/**/*",
+    "routes/**/*",
+    "types/**/*",
+    "services/**/*",
+    "libs/**/*",
+    "providers/**/*",
+    "theme/**/*",
+    "config.ts",
+    "vite.config.ts",
+    "vite.config.server.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
+
+

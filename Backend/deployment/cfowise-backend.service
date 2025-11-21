@@ -1,0 +1,46 @@
+[Unit]
+Description=CFOWise Django Backend (Gunicorn)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=notify
+User=cfowise
+Group=cfowise
+WorkingDirectory=/opt/cfowise/Backend
+Environment="PATH=/opt/cfowise/venv/bin"
+EnvironmentFile=/opt/cfowise/.env
+Environment="DJANGO_ALLOWED_HOSTS=nntc.io,www.nntc.io,127.0.0.1,localhost"
+ExecStart=/opt/cfowise/venv/bin/gunicorn \
+    --workers 3 \
+    --timeout 120 \
+    --bind 127.0.0.1:8001 \
+    --access-logfile /var/log/cfowise/gunicorn-access.log \
+    --error-logfile /var/log/cfowise/gunicorn-error.log \
+    --log-level info \
+    cfowise.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=false
+ProtectHome=true
+ReadWritePaths=/opt/cfowise /var/log/cfowise /tmp /var/run
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cfowise-backend
+
+[Install]
+WantedBy=multi-user.target
+
