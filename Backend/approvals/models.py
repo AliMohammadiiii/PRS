@@ -21,6 +21,15 @@ class ApprovalHistory(BaseModel):
     request = models.ForeignKey('purchase_requests.PurchaseRequest', on_delete=models.CASCADE, related_name='approval_history')
     step = models.ForeignKey('workflows.WorkflowStep', on_delete=models.PROTECT, related_name='approval_history')
     approver = models.ForeignKey('accounts.User', on_delete=models.PROTECT, related_name='approval_actions')
+    # Optional role context for this approval, matching the workflow step role used.
+    role = models.ForeignKey(
+        'classifications.Lookup',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='approval_history_roles',
+        help_text='Role under which the approver acted (COMPANY_ROLE lookup).',
+    )
     action = models.CharField(max_length=16, choices=ACTION_CHOICES)
     comment = models.TextField(null=True, blank=True, help_text='Required for rejections, optional for approvals')
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -40,6 +49,12 @@ class ApprovalHistory(BaseModel):
         # Step must be active
         if self.step and not self.step.is_active:
             raise ValidationError('Step must be active.')
+        # Role (if present) must be active and of correct type
+        if self.role:
+            if not self.role.is_active:
+                raise ValidationError('Approval role must be active.')
+            if getattr(getattr(self.role, 'type', None), 'code', None) != 'COMPANY_ROLE':
+                raise ValidationError('Approval roles must use COMPANY_ROLE lookups.')
         # Rejection requires comment (minimum 10 characters)
         if self.action == self.REJECT:
             if not self.comment or len(self.comment.strip()) < 10:

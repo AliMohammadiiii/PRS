@@ -1,7 +1,7 @@
 import { FC, useState, useEffect } from 'react';
 import logger from "@/lib/logger";
 import { Box, Button, Typography, CircularProgress } from 'injast-core/components';
-import { User, Organization } from 'src/types/operations';
+import { User } from 'src/types/operations';
 import { BasicInfoItem } from 'src/types/basicInfo';
 import { UsersTable } from './UsersTable';
 import { AddUserModal } from './AddUserModal';
@@ -10,29 +10,64 @@ import * as userApi from 'src/services/api/users';
 import * as accessScopeApi from 'src/services/api/accessScopes';
 import { User as ApiUser } from 'src/types/api/users';
 import { AccessScope } from 'src/types/api/accessScopes';
+import { Team } from 'src/types/api/prs';
 
 type UsersSectionProps = {
-  organizations: Organization[];
   roles: BasicInfoItem[]; // position-in-company items
+  teams: Team[];
 };
 
-// Helper function to map backend User to frontend User
+// Helper function to map backend User + access scopes to frontend User
 function mapApiUserToUser(apiUser: ApiUser, accessScopes: AccessScope[]): User {
-  const userScope = accessScopes.find((scope) => scope.user === apiUser.id);
+  const userScopes = accessScopes.filter(
+    (scope) => scope.user === apiUser.id && scope.is_active
+  );
+
+  // Build full list of team/role assignments for this user (only team-based scopes are relevant here)
+  const assignments =
+    userScopes
+      .filter((scope) => scope.team)
+      .map((scope) => ({
+        teamId: scope.team || null,
+        teamName: scope.team_name || '',
+        roleId: scope.role,
+        roleTitle: scope.role_title || '',
+        isActive: scope.is_active,
+      })) || [];
+
+  // Prefer a team-based primary scope for PRS; fall back to any active scope
+  const primaryScope =
+    assignments.length > 0
+      ? assignments[0]
+      : userScopes[0]
+        ? {
+            teamId: userScopes[0].team || null,
+            teamName: userScopes[0].team_name || '',
+            roleId: userScopes[0].role,
+            roleTitle: userScopes[0].role_title || '',
+            isActive: userScopes[0].is_active,
+          }
+        : undefined;
+
   return {
     id: apiUser.id,
+    username: apiUser.username,
     name: `${apiUser.first_name || ''} ${apiUser.last_name || ''}`.trim() || apiUser.username,
     nationalId: apiUser.national_code || '',
     phoneNumber: apiUser.mobile_phone || '',
-    role: userScope?.role_title || '',
-    organizationId: userScope?.org_node || undefined,
+    // Keep primary role/team fields for backwards compatibility in the UI
+    role: primaryScope?.roleId || '',
+    // Reuse organizationId as primary team ID for PRS UI
+    organizationId: primaryScope?.teamId || undefined,
+    teamName: primaryScope?.teamName || '',
+    assignments,
     isActive: apiUser.is_active,
     createdAt: apiUser.created_at,
     updatedAt: apiUser.updated_at,
   };
 }
 
-const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
+const UsersSection: FC<UsersSectionProps> = ({ roles, teams }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [existingUsers, setExistingUsers] = useState<ApiUser[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -92,19 +127,50 @@ const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
           mobile_phone: userData.phoneNumber || '',
           is_active: userData.isActive,
         };
-        const updated = await userApi.updateUser(userData.id, updateData);
+        await userApi.updateUser(userData.id, updateData);
         
-        // Update access scope if organization or role changed
-        if (userData.organizationId || userData.role) {
-          const scopes = await accessScopeApi.getAccessScopes();
-          const userScope = scopes.find((s) => s.user === userData.id);
-          if (userScope) {
-            const role = roles.find((r) => r.id === userData.role);
-            if (role) {
-              await accessScopeApi.updateAccessScope(userScope.id, {
-                org_node: userData.organizationId || null,
-                role: role.id,
-                position_title: role.title,
+        // Handle multiple access scopes
+        const assignments = userData.assignments || [];
+        if (assignments.length > 0) {
+          // Get all existing scopes for this user
+          const allScopes = await accessScopeApi.getAccessScopes();
+          const userScopes = allScopes.filter((s) => s.user === userData.id);
+          
+          // Create or update scopes based on assignments
+          for (const assignment of assignments) {
+            if (assignment.teamId && assignment.roleId) {
+              const role = roles.find((r) => r.id === assignment.roleId);
+              if (role) {
+                // Check if scope already exists for this team
+                const existingScope = userScopes.find((s) => s.team === assignment.teamId);
+                if (existingScope) {
+                  // Update existing scope
+                  await accessScopeApi.updateAccessScope(existingScope.id, {
+                    team: assignment.teamId,
+                    role: assignment.roleId,
+                    position_title: role.title,
+                    is_active: assignment.isActive !== false,
+                  });
+                } else {
+                  // Create new scope
+                  await accessScopeApi.createAccessScope({
+                    user: userData.id,
+                    team: assignment.teamId,
+                    role: assignment.roleId,
+                    position_title: role.title,
+                    is_active: assignment.isActive !== false,
+                  });
+                }
+              }
+            }
+          }
+          
+          // Deactivate scopes that are no longer in assignments
+          const activeTeamIds = assignments.map(a => a.teamId).filter(Boolean);
+          for (const scope of userScopes) {
+            if (scope.team && !activeTeamIds.includes(scope.team)) {
+              await accessScopeApi.updateAccessScope(scope.id, {
+                is_active: false,
               });
             }
           }
@@ -120,24 +186,27 @@ const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
       } else {
         // Check if creating new user or access scope for existing user
         if (userData.userType === 'existing' && userData.id) {
-          // Create access scope for existing user
-          if (userData.organizationId && userData.role) {
-            const role = roles.find((r) => r.id === userData.role);
-            if (role) {
-              await accessScopeApi.createAccessScope({
-                user: userData.id,
-                org_node: userData.organizationId,
-                role: role.id,
-                position_title: role.title,
-                is_active: userData.isActive,
-              });
+          // Create access scopes for existing user
+          const assignments = userData.assignments || [];
+          for (const assignment of assignments) {
+            if (assignment.teamId && assignment.roleId) {
+              const role = roles.find((r) => r.id === assignment.roleId);
+              if (role) {
+                await accessScopeApi.createAccessScope({
+                  user: userData.id,
+                  team: assignment.teamId,
+                  role: assignment.roleId,
+                  position_title: role.title,
+                  is_active: assignment.isActive !== false,
+                });
+              }
             }
           }
         } else {
           // Create new user
           const nameParts = (userData.name || '').split(' ');
           const createData = {
-            username: userData.nationalId || `user_${Date.now()}`,
+            username: userData.username || userData.nationalId || `user_${Date.now()}`,
             password: userData.password || 'TempPassword123!',
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || '',
@@ -147,17 +216,20 @@ const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
           };
           const created = await userApi.createUser(createData);
 
-          // Create access scope if organization and role provided
-          if (userData.organizationId && userData.role) {
-            const role = roles.find((r) => r.id === userData.role);
-            if (role) {
-              await accessScopeApi.createAccessScope({
-                user: created.id,
-                org_node: userData.organizationId,
-                role: role.id,
-                position_title: role.title,
-                is_active: true,
-              });
+          // Create access scopes for all assignments
+          const assignments = userData.assignments || [];
+          for (const assignment of assignments) {
+            if (assignment.teamId && assignment.roleId) {
+              const role = roles.find((r) => r.id === assignment.roleId);
+              if (role) {
+                await accessScopeApi.createAccessScope({
+                  user: created.id,
+                  team: assignment.teamId,
+                  role: assignment.roleId,
+                  position_title: role.title,
+                  is_active: true,
+                });
+              }
             }
           }
         }
@@ -256,8 +328,8 @@ const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
       ) : (
         <UsersTable
           users={users}
-          organizations={organizations}
           roles={roles}
+          teams={teams}
           onEdit={handleEdit}
         />
       )}
@@ -267,7 +339,7 @@ const UsersSection: FC<UsersSectionProps> = ({ organizations, roles }) => {
         onOpenChange={setModalOpen}
         onSubmit={handleSubmit}
         initialData={editingUser}
-        organizations={organizations}
+        teams={teams}
         roles={roles}
         existingUsers={existingUsers}
       />

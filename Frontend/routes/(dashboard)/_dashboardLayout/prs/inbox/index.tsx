@@ -25,6 +25,7 @@ import { extractErrorMessage, getPrsStatusColors, hasRole } from 'src/shared/uti
 import { Chip } from '@mui/material';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as authApi from 'src/services/api/auth';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 export const Route = createFileRoute('/(dashboard)/_dashboardLayout/prs/inbox/')({
   beforeLoad: async () => {
@@ -357,23 +358,21 @@ function ApproverInboxPage() {
             </Grid>
             <Grid size={12} md={3}>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <TextField
+                <PersianDatePicker
                   fullWidth
                   height={48}
                   size="small"
-                  type="date"
-                  value={filters.createdFrom || ''}
-                  onChange={(e) => handleFilterChange('createdFrom', e.target.value || undefined)}
+                  value={filters.createdFrom || null}
+                  onChange={(value) => handleFilterChange('createdFrom', value || undefined)}
                   label="از تاریخ"
                   InputLabelProps={{ shrink: true }}
                 />
-                <TextField
+                <PersianDatePicker
                   fullWidth
                   height={48}
                   size="small"
-                  type="date"
-                  value={filters.createdTo || ''}
-                  onChange={(e) => handleFilterChange('createdTo', e.target.value || undefined)}
+                  value={filters.createdTo || null}
+                  onChange={(value) => handleFilterChange('createdTo', value || undefined)}
                   label="تا تاریخ"
                   InputLabelProps={{ shrink: true }}
                 />

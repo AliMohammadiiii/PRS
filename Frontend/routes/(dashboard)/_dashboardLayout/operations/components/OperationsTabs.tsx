@@ -23,7 +23,6 @@ const OperationsTabs: FC<OperationsTabsProps> = ({ activeTab }) => {
 
   const tabs = [
     { label: 'تعریف کاربران', value: 'users' },
-    { label: 'تعریف سازمان', value: 'organization' },
   ];
 
   return (

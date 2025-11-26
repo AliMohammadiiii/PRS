@@ -12,14 +12,17 @@ import UsersSection from './components/UsersSection';
 import { Organization } from 'src/types/operations';
 import { BasicInfoItem } from 'src/types/basicInfo';
 import * as orgApi from 'src/services/api/organizations';
+import * as prsApi from 'src/services/api/prs';
 import * as lookupApi from 'src/services/api/lookups';
 import { OrgNode } from 'src/types/api/organizations';
 import { Lookup } from 'src/types/api/lookups';
+import { Team } from 'src/types/api/prs';
 import { INITIAL_LIMIT } from 'src/shared/constants';
 import { updateSearchParams } from 'src/shared/utils/updateSearchParams';
+import { useAuth } from 'src/client/contexts/AuthContext';
 
 const pageSearchSchema = z.object({
-  active_tab: z.enum(['organization', 'users']).catch('organization'),
+  active_tab: z.enum(['organization', 'users']).catch('users'),
   page: z.number().catch(1),
   limit: z.number().catch(INITIAL_LIMIT),
   search: z.string().optional().catch(undefined),
@@ -82,11 +85,14 @@ function mapLookupToBasicInfoItem(lookup: Lookup, category: string): BasicInfoIt
 }
 
 function OperationsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.is_admin ?? false;
   const { active_tab: activeTab, search: searchParam } = Route.useSearch();
   const [searchValue, setSearchValue] = useState(searchParam || '');
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
   const [roles, setRoles] = useState<BasicInfoItem[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,11 +140,28 @@ function OperationsPage() {
   };
 
   useEffect(() => {
-    loadOrganizations();
-  }, []);
+    if (isAdmin) {
+      loadOrganizations();
+    }
+  }, [isAdmin]);
+
+  // Load teams for PRS user management
+  useEffect(() => {
+    if (!isAdmin) return;
+    const loadTeams = async () => {
+      try {
+        const data = await prsApi.getTeams();
+        setTeams(data.filter((t) => t.is_active));
+      } catch (err: any) {
+        logger.error('Error loading teams:', err);
+      }
+    };
+    loadTeams();
+  }, [isAdmin]);
 
   // Load roles (position-in-company) from API
   useEffect(() => {
+    if (!isAdmin) return;
     const loadRoles = async () => {
       try {
         const lookups = await lookupApi.getLookups();
@@ -155,11 +178,11 @@ function OperationsPage() {
       }
     };
     loadRoles();
-  }, []);
+  }, [isAdmin]);
 
   // Refresh roles when switching to users tab
   useEffect(() => {
-    if (activeTab === 'users') {
+    if (isAdmin && activeTab === 'users') {
       const loadRoles = async () => {
         try {
           const lookups = await lookupApi.getLookups();
@@ -284,6 +307,19 @@ function OperationsPage() {
     }
   };
 
+  if (!isAdmin) {
+    return (
+      <>
+        <PageHeader title="تعریف عملیاتی" breadcrumb={['تعریف عملیاتی']} />
+        <Box sx={{ p: 3, bgcolor: '#fee', borderRadius: 2, mt: 3 }}>
+          <Typography color="error">
+            شما دسترسی لازم برای مشاهده این صفحه را ندارید.
+          </Typography>
+        </Box>
+      </>
+    );
+  }
+
   if (isLoading) {
     return (
       <>
@@ -360,10 +396,7 @@ function OperationsPage() {
                 </Grid>
               </Grid>
             </Box>
-            <UsersSection
-              organizations={organizations}
-              roles={roles}
-            />
+            <UsersSection roles={roles} teams={teams} />
           </>
         )}
       </Box>

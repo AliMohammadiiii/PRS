@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { X, Calendar } from 'lucide-react';
-import { useForm, SubmitHandler } from 'react-hook-form';
+import { useForm, SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Modal,
@@ -19,6 +19,7 @@ import { defaultColors } from 'injast-core/constants';
 import { Organization, OrganizationFormData } from 'src/types/operations';
 import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { z } from 'zod';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 const organizationSchema = z.object({
   name: z.string().min(1, 'نام شرکت الزامی است'),
@@ -68,6 +69,7 @@ export function AddOrganizationModal({
     setValue,
     watch,
     reset,
+    control,
   } = useForm<FormData>({
     resolver: zodResolver(organizationSchema),
     mode: 'onChange',
@@ -257,18 +259,25 @@ export function AddOrganizationModal({
               helperText={errors.economicCode?.message}
             />
 
-            <TextField
-              label="تاریخ ثبت/تأسیس"
-              fullWidth
-              height={48}
-              size="small"
-              {...register('registrationDate')}
-              placeholder="تاریخ ثبت/تأسیس"
-              error={!!errors.registrationDate}
-              helperText={errors.registrationDate?.message}
-              startAdornment={
-                <Calendar size={20} color={defaultColors.neutral.light} />
-              }
+            <Controller
+              name="registrationDate"
+              control={control}
+              render={({ field }) => (
+                <PersianDatePicker
+                  label="تاریخ ثبت/تأسیس"
+                  fullWidth
+                  height={48}
+                  size="small"
+                  value={field.value || null}
+                  onChange={field.onChange}
+                  placeholder="تاریخ ثبت/تأسیس"
+                  error={!!errors.registrationDate}
+                  helperText={errors.registrationDate?.message}
+                  startAdornment={
+                    <Calendar size={20} color={defaultColors.neutral.light} />
+                  }
+                />
+              )}
             />
 
             <TextField

@@ -1,22 +1,7 @@
 import { FC, useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
-import {
-  Icon,
-  DocumentText,
-  Setting2,
-  NotificationBing,
-  Lock1,
-  ArrowDown2,
-  ArrowUp2,
-  Chart2,
-  AddSquare,
-  DocumentText1,
-  TickCircle,
-  Wallet3,
-} from 'iconsax-reactjs';
+import { Icon, Setting2, Lock1, ArrowDown2, ArrowUp2, AddSquare, DocumentText1, TickCircle, Wallet3 } from 'iconsax-reactjs';
 import { Box, Image, Typography } from 'injast-core/components';
-import { defaultColors } from 'injast-core/constants';
-import { INITIAL_LIMIT } from 'src/shared/constants';
 import { useAuth } from 'src/client/contexts/AuthContext';
 import { hasRole, isRequesterOnlyUser } from 'src/shared/utils/prsUtils';
 
@@ -94,7 +79,7 @@ type SubMenuItemProps = {
   to: string;
 };
 
-const SubMenuItem: FC<SubMenuItemProps> = ({ isActive, title, to }) => {
+const SubMenuItem: FC<SubMenuItemProps> = ({ title, to }) => {
   return (
     <Link to={to}>
       {({ isActive: linkIsActive }: { isActive: boolean }) => (
@@ -187,6 +172,13 @@ const adminMenuConfig: MenuEntry[] = [
     to: '/prs/finance',
     title: 'صندوق مالی',
     icon: Wallet3,
+    disabled: false,
+  },
+  {
+    key: 'prs-admin-operations',
+    to: '/operations',
+    title: 'مدیریت کاربران',
+    icon: Setting2,
     disabled: false,
   },
   // UA-03: Admin navigation – admin-only configuration / management pages.

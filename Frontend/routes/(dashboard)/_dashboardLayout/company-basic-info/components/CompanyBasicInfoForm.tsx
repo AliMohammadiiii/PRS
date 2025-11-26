@@ -21,6 +21,7 @@ import * as orgApi from 'src/services/api/organizations';
 import { Lookup } from 'src/types/api/lookups';
 import { CompanyRole } from 'src/types/api/auth';
 import { Calendar } from 'lucide-react';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 const companyBasicInfoSchema = z.object({
   // User Information
@@ -462,21 +463,27 @@ const CompanyBasicInfoForm: FC<CompanyBasicInfoFormProps> = ({
               />
             </Grid>
             <Grid size={6}>
-              <TextField
-                {...register('incorporationDate')}
-                fullWidth
-                height={48}
-                type="date"
-                placeholder="تاریخ ثبت/تأسیس"
-                disabled={!isEditing}
-                startAdornment={
-                  <Calendar size={20} color={defaultColors.neutral.light} />
-                }
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 1,
-                  },
-                }}
+              <Controller
+                name="incorporationDate"
+                control={control}
+                render={({ field }) => (
+                  <PersianDatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    fullWidth
+                    height={48}
+                    placeholder="تاریخ ثبت/تأسیس"
+                    disabled={!isEditing}
+                    startAdornment={
+                      <Calendar size={20} color={defaultColors.neutral.light} />
+                    }
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 1,
+                      },
+                    }}
+                  />
+                )}
               />
             </Grid>
             <Grid size={6}>

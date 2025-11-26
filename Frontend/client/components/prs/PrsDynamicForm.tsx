@@ -9,6 +9,7 @@ import {
   Button,
 } from 'injast-core/components';
 import { FormField } from 'src/types/api/prs';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 export interface PrsDynamicFormProps {
   fields: FormField[];
@@ -142,19 +143,15 @@ export default function PrsDynamicForm({
                 {field.help_text}
               </Typography>
             )}
-            <TextField
+            <PersianDatePicker
               fullWidth
               height={48}
-              type="date"
               value={dateValue}
-              onChange={(e) => handleFieldChange(field.id, e.target.value || null)}
+              onChange={(value) => handleFieldChange(field.id, value)}
               disabled={!isEditable}
               required={isRequired}
               error={!!fieldError}
               helperText={fieldError}
-              InputLabelProps={{
-                shrink: true,
-              }}
             />
           </Box>
         );

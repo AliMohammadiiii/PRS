@@ -7,6 +7,7 @@ import { getOrgNodes } from 'src/services/api/organizations';
 import { getFinancialPeriods } from 'src/services/api/periods';
 import { OrgNode } from 'src/types/api/organizations';
 import { FinancialPeriod } from 'src/types/api/periods';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 type ReportBoxFieldsFormProps = {
   reportBox: ReportBox;
@@ -167,13 +168,9 @@ export default function ReportBoxFieldsForm({
                 {field.help_text}
               </Typography>
             )}
-            <TextField
-              type="date"
-              value={fieldValue ? new Date(fieldValue).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const value = e.target.value === '' ? null : e.target.value;
-                onFieldChange(field.id, value);
-              }}
+            <PersianDatePicker
+              value={fieldValue}
+              onChange={(value) => onFieldChange(field.id, value)}
               disabled={!isEditable}
               fullWidth
               height={48}

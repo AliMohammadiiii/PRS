@@ -27,6 +27,7 @@ export interface AccessScopeCreateRequest {
 export interface AccessScopeUpdateRequest {
   user?: string; // UUID
   org_node?: string | null; // UUID
+  team?: string | null; // UUID
   role?: string; // UUID
   position_title?: string | null;
   is_active?: boolean;

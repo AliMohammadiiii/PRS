@@ -20,6 +20,7 @@ import OrganizationInfoEmptyState from './OrganizationInfoEmptyState';
 import { z } from 'zod';
 import * as lookupApi from 'src/services/api/lookups';
 import { Lookup } from 'src/types/api/lookups';
+import { PersianDatePicker } from '@/components/ui/persian-date-picker';
 
 const organizationSchema = z.object({
   name: z.string().min(1, 'نام شرکت الزامی است'),
@@ -481,18 +482,25 @@ const OrganizationInfoForm: FC<OrganizationInfoFormProps> = ({
             helperText={errors.economicCode?.message}
           />
 
-          <TextField
-            label="تاریخ ثبت/تأسیس"
-            fullWidth
-            height={48}
-            size="small"
-            {...register('registrationDate')}
-            placeholder="تاریخ ثبت/تأسیس"
-            error={!!errors.registrationDate}
-            helperText={errors.registrationDate?.message}
-            startAdornment={
-              <Calendar size={20} color={defaultColors.neutral.light} />
-            }
+          <Controller
+            name="registrationDate"
+            control={control}
+            render={({ field }) => (
+              <PersianDatePicker
+                label="تاریخ ثبت/تأسیس"
+                fullWidth
+                height={48}
+                size="small"
+                value={field.value || null}
+                onChange={field.onChange}
+                placeholder="تاریخ ثبت/تأسیس"
+                error={!!errors.registrationDate}
+                helperText={errors.registrationDate?.message}
+                startAdornment={
+                  <Calendar size={20} color={defaultColors.neutral.light} />
+                }
+              />
+            )}
           />
 
           <Select

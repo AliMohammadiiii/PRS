@@ -6,8 +6,15 @@ import {
 } from 'src/types/api/accessScopes';
 
 export async function getAccessScopes(): Promise<AccessScope[]> {
-  const response = await apiRequest.get<AccessScope[]>('/api/access-scopes/');
-  return response.data;
+  const response = await apiRequest.get<any>('/api/access-scopes/');
+  // Support both paginated and non-paginated responses
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+  if (response.data && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  return [];
 }
 
 export async function getAccessScope(id: string): Promise<AccessScope> {

@@ -1,12 +1,12 @@
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { getRouteApi } from '@tanstack/react-router';
 import { Box } from '@mui/material';
-import { FC, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import ContentBox from 'src/shared/components/ContentBox';
 import DataGridLoading from 'src/shared/components/DataGridLoading';
 import DataGridPagination from 'src/shared/components/DataGridPagination';
 import { DATAGRID_WRAPPER_MIN_HIGHT } from 'src/shared/constants';
-import { User, Organization } from 'src/types/operations';
+import { User } from 'src/types/operations';
 import { BasicInfoItem } from 'src/types/basicInfo';
 import { ActionButton } from '@/components/FieldTable/ActionButton';
 import { StatusBadge } from '@/components/FieldTable/StatusBadge';
@@ -15,28 +15,66 @@ const routeApi = getRouteApi('/(dashboard)/_dashboardLayout/operations/');
 
 type UsersTableProps = {
   users: User[];
-  organizations: Organization[];
   roles: BasicInfoItem[];
+  teams: Array<{ id: string; name: string }>;
   onEdit: (id: string) => void;
 };
 
 export function UsersTable({
   users,
-  organizations,
   roles,
+  teams,
   onEdit,
 }: UsersTableProps) {
   const { page, limit, search } = routeApi.useSearch();
 
-  const getOrganizationName = (organizationId?: string) => {
-    if (!organizationId) return 'ـــ';
-    const org = organizations.find((o) => o.id === organizationId);
-    return org?.name || 'ـــ';
-  };
-
   const getRoleName = (roleId: string) => {
     const role = roles.find((r) => r.id === roleId);
     return role?.title || roleId;
+  };
+
+  const getUserAssignmentsSummary = (user: User): string => {
+    if (!user.assignments || user.assignments.length === 0) {
+      // Fallback to legacy single role/team fields
+      const roleTitle = user.role ? getRoleName(user.role) : '';
+      const teamName = user.teamName || '';
+      if (!roleTitle && !teamName) return '';
+      if (!teamName) return roleTitle;
+      if (!roleTitle) return teamName;
+      return `${teamName} - ${roleTitle}`;
+    }
+
+    // Check if user has the same role in ALL teams (not just multiple teams)
+    const uniqueRoles = new Set(user.assignments.map(a => a.roleId));
+    const uniqueTeamIds = new Set(user.assignments.map(a => a.teamId).filter(Boolean));
+    const allTeamIds = new Set(teams.map(t => t.id));
+    
+    // Only show "همه تیم‌ها" if:
+    // 1. User has only one unique role
+    // 2. User has assignments for ALL teams
+    // 3. Number of assignments equals number of teams
+    if (
+      uniqueRoles.size === 1 && 
+      uniqueTeamIds.size === allTeamIds.size &&
+      user.assignments.length === teams.length &&
+      teams.length > 1
+    ) {
+      // Same role across ALL teams - show "all teams"
+      const roleTitle = user.assignments[0].roleTitle || getRoleName(user.assignments[0].roleId);
+      if (roleTitle) {
+        return `همه تیم‌ها - ${roleTitle}`;
+      }
+    }
+
+    // Otherwise, show individual team/role assignments
+    return user.assignments
+      .map((a) => {
+        const roleTitle = a.roleTitle || getRoleName(a.roleId);
+        const teamName = a.teamName || 'ـــ';
+        if (!roleTitle) return teamName;
+        return `${teamName} - ${roleTitle}`;
+      })
+      .join('، ');
   };
 
   // Filter data based on search
@@ -46,11 +84,12 @@ export function UsersTable({
     return users.filter(
       (user) =>
         user.name.toLowerCase().includes(searchLower) ||
+        (user.username || '').toLowerCase().includes(searchLower) ||
         user.nationalId.toLowerCase().includes(searchLower) ||
-        getRoleName(user.role).toLowerCase().includes(searchLower) ||
-        getOrganizationName(user.organizationId).toLowerCase().includes(searchLower)
+        // Match against any role/team assignment text
+        getUserAssignmentsSummary(user).toLowerCase().includes(searchLower)
     );
-  }, [users, search, organizations, roles]);
+  }, [users, search, roles]);
 
   // Paginate data
   const paginatedData = useMemo(() => {
@@ -75,40 +114,80 @@ export function UsersTable({
         field: 'name',
         headerName: 'نام و نام خانوادگی',
         flex: 1,
-        minWidth: 200,
+        minWidth: 100,
+      },
+      {
+        field: 'username',
+        headerName: 'نام کاربری',
+        flex: 1,
+        minWidth: 100,
       },
       {
         field: 'nationalId',
         headerName: 'شناسه ملی',
         flex: 1,
-        minWidth: 150,
+        minWidth: 20,
       },
       {
         field: 'role',
-        headerName: 'سمت',
-        flex: 1,
-        minWidth: 150,
-        renderCell: (params: GridRenderCellParams<User, string>) => (
-          <Box sx={{ fontSize: '14px', fontWeight: 500 }}>
-            {getRoleName(params.value || '')}
-          </Box>
-        ),
-      },
-      {
-        field: 'organizationId',
-        headerName: 'نام سازمان',
-        flex: 1,
-        minWidth: 200,
-        renderCell: (params: GridRenderCellParams<User, string | undefined>) => (
-          <Box sx={{ fontSize: '14px', fontWeight: 500 }}>
-            {getOrganizationName(params.value)}
-          </Box>
-        ),
+        headerName: 'تیم / سمت‌ها',
+        flex: 2,
+        minWidth: 600,
+        renderCell: (params: GridRenderCellParams<User, string>) => {
+          const user = params.row;
+          const assignments = user.assignments || [];
+          
+          if (assignments.length === 0) {
+            // Fallback to legacy single role/team fields
+            const roleTitle = user.role ? getRoleName(user.role) : '';
+            const teamName = user.teamName || '';
+            if (!roleTitle && !teamName) return <Box sx={{ fontSize: '14px', color: 'neutral.light' }}>ـــ</Box>;
+            return (
+              <Box
+                sx={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  wordBreak: 'break-word',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  lineHeight: 1.5,
+                }}
+              >
+                {teamName && roleTitle ? `${teamName} - ${roleTitle}` : roleTitle || teamName}
+              </Box>
+            );
+          }
+
+          const summary = getUserAssignmentsSummary(user);
+
+          return (
+            <Box
+              sx={{
+                fontSize: '14px',
+                fontWeight: 500,
+                wordBreak: 'break-word',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                lineHeight: 1.5,
+                maxHeight: '4.5em',
+                width: '100%',
+              }}
+            >
+              {summary}
+            </Box>
+          );
+        },
       },
       {
         field: 'isActive',
         headerName: 'وضعیت',
-        width: 120,
+        width: 100,
         align: 'center',
         headerAlign: 'center',
         renderCell: (params: GridRenderCellParams<User, boolean>) => (
@@ -198,6 +277,12 @@ export function UsersTable({
               alignItems: 'center',
               fontSize: '14px',
               borderBottom: '1px solid #e5e7ea',
+              overflow: 'visible',
+            },
+            '& .MuiDataGrid-cell[data-field="role"]': {
+              alignItems: 'flex-start',
+              paddingTop: '12px',
+              paddingBottom: '12px',
             },
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f4f6fa',

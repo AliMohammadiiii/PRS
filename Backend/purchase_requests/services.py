@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 import logging
 from classifications.models import Lookup
+from accounts.models import AccessScope
 from purchase_requests.models import PurchaseRequest, RequestFieldValue
 from prs_forms.models import FormField, FormTemplate
 from attachments.models import AttachmentCategory, Attachment
@@ -98,14 +99,29 @@ def ensure_user_is_step_approver(user, request: PurchaseRequest):
     """
     if not request.current_step:
         raise PermissionDenied('Request does not have a current step.')
-    
-    is_approver = WorkflowStepApprover.objects.filter(
-        step=request.current_step,
-        approver=user,
-        is_active=True
+
+    # Get all active roles configured for this step
+    step_role_ids = list(
+        WorkflowStepApprover.objects.filter(
+            step=request.current_step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+    )
+
+    if not step_role_ids:
+        raise PermissionDenied(
+            f'No approver roles are configured for step "{request.current_step.step_name}".'
+        )
+
+    # Check if user has at least one of the required roles for this team
+    has_role = AccessScope.objects.filter(
+        user=user,
+        team=request.team,
+        role_id__in=step_role_ids,
+        is_active=True,
     ).exists()
-    
-    if not is_approver:
+
+    if not has_role:
         raise PermissionDenied(
             f'You are not authorized to approve requests at step "{request.current_step.step_name}".'
         )
@@ -118,17 +134,31 @@ def ensure_user_is_finance_reviewer(user, request: PurchaseRequest):
     """
     if not request.current_step:
         raise PermissionDenied('Request does not have a current step.')
-    
+
     if not request.current_step.is_finance_review:
         raise PermissionDenied('Request is not at a finance review step.')
-    
-    is_approver = WorkflowStepApprover.objects.filter(
-        step=request.current_step,
-        approver=user,
-        is_active=True
+
+    # Get all active finance reviewer roles for this step
+    step_role_ids = list(
+        WorkflowStepApprover.objects.filter(
+            step=request.current_step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+    )
+
+    if not step_role_ids:
+        raise PermissionDenied(
+            f'No finance reviewer roles are configured for step "{request.current_step.step_name}".'
+        )
+
+    has_role = AccessScope.objects.filter(
+        user=user,
+        team=request.team,
+        role_id__in=step_role_ids,
+        is_active=True,
     ).exists()
-    
-    if not is_approver:
+
+    if not has_role:
         raise PermissionDenied(
             f'You are not authorized to complete requests at finance review step "{request.current_step.step_name}".'
         )
@@ -139,18 +169,18 @@ def have_all_approvers_approved(request: PurchaseRequest, step: WorkflowStep) ->
     Check if all approvers for a step have approved the request.
     Returns True if all approvers have an ApprovalHistory with action=APPROVE.
     """
-    # Get all active approvers for this step
-    approvers = WorkflowStepApprover.objects.filter(
+    # Get all active approver roles for this step
+    step_role_ids_qs = WorkflowStepApprover.objects.filter(
         step=step,
-        is_active=True
-    ).values_list('approver_id', flat=True)
-    
-    if not approvers.exists():
-        # No approvers configured - cannot be fully approved
+        is_active=True,
+    ).values_list('role_id', flat=True)
+
+    if not step_role_ids_qs.exists():
+        # No roles configured - cannot be fully approved
         return False
-    
-    approver_ids = list(approvers)
-    
+
+    step_role_ids = list(step_role_ids_qs)
+
     # Get all approvals for this request and step
     # IMPORTANT: Only consider approvals from the current submission cycle.
     # When a request is rejected and then resubmitted, older approvals (from
@@ -163,13 +193,16 @@ def have_all_approvers_approved(request: PurchaseRequest, step: WorkflowStep) ->
     if request.submitted_at:
         approvals_qs = approvals_qs.filter(timestamp__gte=request.submitted_at)
 
-    approvals = approvals_qs.values_list('approver_id', flat=True).distinct()
-    
-    approved_approver_ids = set(approvals)
-    required_approver_ids = set(approver_ids)
-    
-    # All required approvers must have approved
-    return required_approver_ids.issubset(approved_approver_ids)
+    # We consider a role satisfied if there is at least one approval record
+    # where the recorded role matches the step role. This supports AND logic
+    # across roles while allowing any user with that role to approve.
+    approved_role_ids = set(
+        approvals_qs.values_list('role_id', flat=True).distinct()
+    )
+    required_role_ids = set(step_role_ids)
+
+    # All required roles must have at least one approval
+    return required_role_ids.issubset(approved_role_ids)
 
 
 def validate_required_fields(purchase_request: PurchaseRequest) -> List[Dict[str, Any]]:
@@ -732,14 +765,30 @@ def get_approver_inbox_qs(user):
         QuerySet of PurchaseRequest objects for the approver inbox
     """
     # Base queryset: active requests with current step in approval states
+    # Base queryset: active requests with current step in approval states
     qs = _get_base_purchase_request_queryset().filter(
         is_active=True,
         current_step__isnull=False,
         status__code__in=['PENDING_APPROVAL', 'IN_REVIEW'],
-        # User must be an approver for the current step
-        current_step__approvers__approver=user,
-        current_step__approvers__is_active=True,
     )
+
+    # Restrict to requests where user has at least one of the roles configured
+    # on the current step for that team.
+    # Correlate on WorkflowStepApprover -> WorkflowStep -> Workflow -> Team so that
+    # roles are matched for the correct team. We cannot reference `team` directly
+    # on WorkflowStepApprover (it doesn't have that field), so we use the
+    # step->workflow->team chain for the inner AccessScope subquery.
+    step_role_exists = WorkflowStepApprover.objects.filter(
+        step=OuterRef('current_step'),
+        is_active=True,
+        role_id__in=AccessScope.objects.filter(
+            user=user,
+            team=OuterRef('step__workflow__team'),
+            is_active=True,
+        ).values('role_id'),
+    )
+
+    qs = qs.filter(Exists(step_role_exists))
     
     # Exclude requests where user has already approved the current step
     # Use Exists subquery to check ApprovalHistory
@@ -780,10 +829,22 @@ def get_finance_inbox_qs(user):
         is_active=True,
         status__code='FINANCE_REVIEW',
         current_step__is_finance_review=True,
-        # User must be an approver for the current finance review step
-        current_step__approvers__approver=user,
-        current_step__approvers__is_active=True,
     )
+
+    # Restrict to requests where user has at least one of the finance roles
+    # configured on the current step for that team.
+    # Same team-correlation logic as in `get_approver_inbox_qs`.
+    step_role_exists = WorkflowStepApprover.objects.filter(
+        step=OuterRef('current_step'),
+        is_active=True,
+        role_id__in=AccessScope.objects.filter(
+            user=user,
+            team=OuterRef('step__workflow__team'),
+            is_active=True,
+        ).values('role_id'),
+    )
+
+    qs = qs.filter(Exists(step_role_exists))
     
     # Use distinct() to avoid duplicates from the join to WorkflowStepApprover
     return qs.distinct()

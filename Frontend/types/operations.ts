@@ -47,10 +47,20 @@ export type OrganizationFormData = {
 export type User = {
   id: string;
   name: string;
+  username?: string;
   nationalId: string; // شناسه ملی
   phoneNumber?: string; // شماره موبایل
-  role: string; // سمت در شرکت
-  organizationId?: string; // Reference to organization
+  role: string; // سمت در شرکت (primary role for backwards compatibility)
+  organizationId?: string; // (Reused) Reference to primary team ID for PRS (primary assignment)
+  teamName?: string; // Display name of primary team (derived from AccessScope)
+  // Full list of team/role assignments derived from access scopes
+  assignments?: {
+    teamId: string | null;
+    teamName: string;
+    roleId: string;
+    roleTitle: string;
+    isActive: boolean;
+  }[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

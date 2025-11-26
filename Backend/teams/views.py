@@ -217,7 +217,7 @@ class TeamViewSet(viewsets.ModelViewSet):
                     queryset=WorkflowStep.objects.filter(is_active=True).order_by('step_order').prefetch_related(
                         Prefetch(
                             'approvers',
-                            queryset=WorkflowStepApprover.objects.filter(is_active=True).select_related('approver')
+                            queryset=WorkflowStepApprover.objects.filter(is_active=True).select_related('role')
                         )
                     )
                 )

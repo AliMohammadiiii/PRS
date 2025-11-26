@@ -9,8 +9,11 @@ import {
 } from 'src/types/api/organizations';
 
 export async function getOrgNodes(): Promise<OrgNode[]> {
-  const response = await apiRequest.get<OrgNode[]>('/api/org-nodes/');
-  return response.data;
+  // NOTE:
+  // The legacy `/api/org-nodes/` endpoint is not exposed in the current PRS backend.
+  // For PRS user management we now rely on teams + access scopes instead of org nodes,
+  // so this function is intentionally a no-op to avoid calling a non-existent endpoint.
+  return [];
 }
 
 export async function getOrgNode(id: string): Promise<OrgNode> {

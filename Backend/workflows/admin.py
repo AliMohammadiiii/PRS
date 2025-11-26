@@ -5,8 +5,8 @@ from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
 class WorkflowStepApproverInline(admin.TabularInline):
     model = WorkflowStepApprover
     extra = 0
-    fields = ('approver', 'is_active')
-    autocomplete_fields = ('approver',)
+    fields = ('role', 'is_active')
+    autocomplete_fields = ('role',)
 
 
 class WorkflowStepInline(admin.TabularInline):
@@ -48,9 +48,9 @@ class WorkflowStepAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowStepApprover)
 class WorkflowStepApproverAdmin(admin.ModelAdmin):
-    list_display = ('step', 'approver', 'is_active')
+    list_display = ('step', 'role', 'is_active')
     list_filter = ('step__workflow__team', 'step__workflow', 'is_active')
-    search_fields = ('step__step_name', 'step__workflow__name', 'approver__username', 'approver__email')
+    search_fields = ('step__step_name', 'step__workflow__name', 'role__code', 'role__title')
     readonly_fields = ('id', 'created_at', 'updated_at')
-    autocomplete_fields = ('approver',)
+    autocomplete_fields = ('role',)
 

@@ -170,6 +170,8 @@ export interface ApprovalHistory {
   id: string;
   step_name: string;
   approver_name: string;
+  role_code: string | null;
+  role_title: string | null;
   action: 'APPROVE' | 'REJECT';
   comment: string | null;
   timestamp: string; // ISO datetime string

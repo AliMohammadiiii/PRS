@@ -32,6 +32,7 @@
     "iconsax-react": "^0.0.8",
     "iconsax-reactjs": "^0.0.8",
     "injast-core": "^1.0.53",
+    "react-multi-date-picker": "^4.5.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {

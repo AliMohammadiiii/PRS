@@ -1,21 +1,21 @@
 from rest_framework import serializers
 from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
-from accounts.models import User
+from classifications.models import Lookup
 
 
 class WorkflowStepApproverSerializer(serializers.ModelSerializer):
-    """Serializer for workflow step approvers"""
-    approver_username = serializers.CharField(source='approver.username', read_only=True)
-    approver_email = serializers.CharField(source='approver.email', read_only=True)
+    """Serializer for workflow step approver roles"""
+    role_code = serializers.CharField(source='role.code', read_only=True)
+    role_title = serializers.CharField(source='role.title', read_only=True)
     
     class Meta:
         model = WorkflowStepApprover
         fields = [
             'id',
             'step',
-            'approver',
-            'approver_username',
-            'approver_email',
+            'role',
+            'role_code',
+            'role_title',
             'is_active',
             'created_at',
             'updated_at',
@@ -45,11 +45,11 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
 
 class WorkflowStepCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating workflow steps"""
-    approver_ids = serializers.ListField(
+    role_ids = serializers.ListField(
         child=serializers.UUIDField(),
         write_only=True,
         required=False,
-        help_text='List of user IDs to assign as approvers for this step'
+        help_text='List of COMPANY_ROLE lookup IDs to assign as approver roles for this step'
     )
     
     class Meta:
@@ -59,7 +59,7 @@ class WorkflowStepCreateSerializer(serializers.ModelSerializer):
             'step_name',
             'step_order',
             'is_finance_review',
-            'approver_ids',
+            'role_ids',
         ]
         read_only_fields = ['id']
     
@@ -72,11 +72,11 @@ class WorkflowStepCreateSerializer(serializers.ModelSerializer):
 
 class WorkflowStepUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating workflow steps"""
-    approver_ids = serializers.ListField(
+    role_ids = serializers.ListField(
         child=serializers.UUIDField(),
         write_only=True,
         required=False,
-        help_text='List of user IDs to assign as approvers for this step'
+        help_text='List of COMPANY_ROLE lookup IDs to assign as approver roles for this step'
     )
     
     class Meta:
@@ -86,7 +86,7 @@ class WorkflowStepUpdateSerializer(serializers.ModelSerializer):
             'step_name',
             'step_order',
             'is_finance_review',
-            'approver_ids',
+            'role_ids',
         ]
         read_only_fields = ['id']
 

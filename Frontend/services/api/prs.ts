@@ -416,9 +416,9 @@ export interface WorkflowStep {
 export interface WorkflowStepApprover {
   id: string;
   step: string;
-  approver: string;
-  approver_username: string;
-  approver_email: string;
+  role_id: string;
+  role_code: string;
+  role_title: string;
   is_active: boolean;
 }
 
@@ -429,7 +429,7 @@ export interface WorkflowCreateRequest {
     step_name: string;
     step_order: number;
     is_finance_review: boolean;
-    approver_ids?: string[];
+    role_ids?: string[];
   }>;
 }
 
@@ -463,7 +463,7 @@ export async function addWorkflowStep(
     step_name: string;
     step_order: number;
     is_finance_review: boolean;
-    approver_ids?: string[];
+    role_ids?: string[];
   }
 ): Promise<WorkflowStep> {
   const response = await apiRequest.post<WorkflowStep>(

@@ -399,27 +399,39 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         # Check permissions - only workflow participants can download
         user = request.user
         is_authorized = False
-        
+
         # System Admins and staff can always download
         if user.is_superuser or user.is_staff:
             is_authorized = True
         # Requestor can download
         elif purchase_request.requestor == user:
             is_authorized = True
-        # Approvers at any step can download
-        elif WorkflowStepApprover.objects.filter(
-            step__workflow__team=purchase_request.team,
-            approver=user,
-            is_active=True
-        ).exists():
-            is_authorized = True
-        # Finance Reviewers can download
-        elif purchase_request.current_step and purchase_request.current_step.is_finance_review:
-            if WorkflowStepApprover.objects.filter(
-                step=purchase_request.current_step,
-                approver=user,
-                is_active=True
-            ).exists():
+        else:
+            # Approvers (by role) at any step can download
+            from workflows.models import WorkflowStepApprover
+
+            user_role_ids = AccessScope.objects.filter(
+                user=user,
+                team=purchase_request.team,
+                is_active=True,
+            ).values('role_id')
+
+            has_step_role = WorkflowStepApprover.objects.filter(
+                step__workflow__team=purchase_request.team,
+                is_active=True,
+                role_id__in=user_role_ids,
+            ).exists()
+
+            # Finance Reviewers can download
+            has_finance_role = False
+            if purchase_request.current_step and purchase_request.current_step.is_finance_review:
+                has_finance_role = WorkflowStepApprover.objects.filter(
+                    step=purchase_request.current_step,
+                    is_active=True,
+                    role_id__in=user_role_ids,
+                ).exists()
+
+            if has_step_role or has_finance_role:
                 is_authorized = True
         
         if not is_authorized:
@@ -495,7 +507,7 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         approval_history = ApprovalHistory.objects.filter(
             request=purchase_request,
             is_active=True
-        ).select_related('step', 'approver').order_by('timestamp')
+        ).select_related('step', 'approver', 'role').order_by('timestamp')
         
         serializer = ApprovalHistorySerializer(approval_history, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -577,12 +589,31 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         
         current_step = purchase_request.current_step
         comment = request.data.get('comment', '').strip() or None
-        
+
+        # Determine the role under which the user is approving, based on the
+        # roles configured for this step and the user's AccessScope on the team.
+        from workflows.models import WorkflowStepApprover
+
+        step_role_ids = WorkflowStepApprover.objects.filter(
+            step=current_step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+
+        approval_role_id = None
+        if step_role_ids.exists():
+            approval_role_id = AccessScope.objects.filter(
+                user=request.user,
+                team=purchase_request.team,
+                role_id__in=step_role_ids,
+                is_active=True,
+            ).values_list('role_id', flat=True).first()
+
         # Create approval history record
         ApprovalHistory.objects.create(
             request=purchase_request,
             step=current_step,
             approver=request.user,
+            role_id=approval_role_id,
             action=ApprovalHistory.APPROVE,
             comment=comment
         )
@@ -677,12 +708,31 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         
         current_step = purchase_request.current_step
         old_status_code = status_code
-        
+
+        # Determine the role under which the user is rejecting, based on the
+        # roles configured for this step and the user's AccessScope on the team.
+        from workflows.models import WorkflowStepApprover
+
+        step_role_ids = WorkflowStepApprover.objects.filter(
+            step=current_step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+
+        rejection_role_id = None
+        if step_role_ids.exists():
+            rejection_role_id = AccessScope.objects.filter(
+                user=request.user,
+                team=purchase_request.team,
+                role_id__in=step_role_ids,
+                is_active=True,
+            ).values_list('role_id', flat=True).first()
+
         # Create approval history record
         ApprovalHistory.objects.create(
             request=purchase_request,
             step=current_step,
             approver=request.user,
+            role_id=rejection_role_id,
             action=ApprovalHistory.REJECT,
             comment=comment
         )
@@ -765,18 +815,37 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         
         current_step = purchase_request.current_step
         comment = request.data.get('comment', '').strip() or None
-        
+
         # Update purchase request to COMPLETED
         purchase_request.status = services.get_completed_status()
         purchase_request.completed_at = timezone.now()
         purchase_request.current_step = None  # Workflow is complete
         purchase_request.save()
-        
+
+        # Determine the role under which the user is completing, based on the
+        # roles configured for this step and the user's AccessScope on the team.
+        from workflows.models import WorkflowStepApprover
+
+        step_role_ids = WorkflowStepApprover.objects.filter(
+            step=current_step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+
+        completion_role_id = None
+        if step_role_ids.exists():
+            completion_role_id = AccessScope.objects.filter(
+                user=request.user,
+                team=purchase_request.team,
+                role_id__in=step_role_ids,
+                is_active=True,
+            ).values_list('role_id', flat=True).first()
+
         # Create approval history record for finance completion
         ApprovalHistory.objects.create(
             request=purchase_request,
             step=current_step,
             approver=request.user,
+            role_id=completion_role_id,
             action=ApprovalHistory.APPROVE,  # Using APPROVE action for consistency
             comment=comment
         )

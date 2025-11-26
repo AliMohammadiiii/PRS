@@ -21,9 +21,9 @@ import {
 import { Add, Edit, Delete, ArrowUp, ArrowDown, TickCircle } from 'iconsax-react';
 import PageHeader from '../../../../components/PageHeader';
 import { Team, Workflow, WorkflowStep, WorkflowStepApprover } from 'src/types/api/prs';
-import { User } from 'src/types/api/users';
+import { Lookup } from 'src/types/api/lookups';
 import * as prsApi from 'src/services/api/prs';
-import * as userApi from 'src/services/api/users';
+import * as lookupsApi from 'src/services/api/lookups';
 import logger from '@/lib/logger';
 import { toast } from '@/hooks/use-toast';
 import { extractErrorMessage } from 'src/shared/utils/prsUtils';
@@ -37,7 +37,7 @@ function WorkflowsAdminPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Lookup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stepDialogOpen, setStepDialogOpen] = useState(false);
@@ -46,7 +46,7 @@ function WorkflowsAdminPage() {
     step_name: '',
     step_order: 1,
     is_finance_review: false,
-    approver_ids: [] as string[],
+    role_ids: [] as string[],
   });
 
   const loadTeams = useCallback(async () => {
@@ -70,12 +70,13 @@ function WorkflowsAdminPage() {
     }
   }, [selectedTeam]);
 
-  const loadUsers = useCallback(async () => {
+  const loadRoles = useCallback(async () => {
     try {
-      const data = await userApi.getUsers();
-      setUsers(data.filter(u => u.is_active));
+      const data = await lookupsApi.getLookups();
+      // Backend might ignore the type filter, so filter explicitly on the frontend
+      setRoles(data.filter(r => r.is_active && r.type === 'COMPANY_ROLE'));
     } catch (err: any) {
-      logger.error('Error loading users:', err);
+      logger.error('Error loading PRS roles:', err);
     }
   }, []);
 
@@ -108,8 +109,8 @@ function WorkflowsAdminPage() {
 
   useEffect(() => {
     loadTeams();
-    loadUsers();
-  }, [loadTeams, loadUsers]);
+    loadRoles();
+  }, [loadTeams, loadRoles]);
 
   useEffect(() => {
     if (selectedTeam) {
@@ -156,7 +157,7 @@ function WorkflowsAdminPage() {
       step_name: '',
       step_order: nextOrder,
       is_finance_review: false,
-      approver_ids: [],
+      role_ids: [],
     });
     setEditingStep(null);
     setStepDialogOpen(true);
@@ -167,7 +168,7 @@ function WorkflowsAdminPage() {
       step_name: step.step_name,
       step_order: step.step_order,
       is_finance_review: step.is_finance_review,
-      approver_ids: step.approvers.map(a => a.approver),
+      role_ids: step.approvers.map(a => a.role_id),
     });
     setEditingStep(step);
     setStepDialogOpen(true);
@@ -187,13 +188,13 @@ function WorkflowsAdminPage() {
                   step_name: stepFormData.step_name,
                   step_order: stepFormData.step_order,
                   is_finance_review: stepFormData.is_finance_review,
-                  approver_ids: stepFormData.approver_ids,
+                  role_ids: stepFormData.role_ids,
                 }
               : {
                   step_name: s.step_name,
                   step_order: s.step_order,
                   is_finance_review: s.is_finance_review,
-                  approver_ids: s.approvers.map(a => a.approver),
+                  role_ids: s.approvers.map(a => a.role_id),
                 }
           )
         : [
@@ -201,13 +202,13 @@ function WorkflowsAdminPage() {
               step_name: s.step_name,
               step_order: s.step_order,
               is_finance_review: s.is_finance_review,
-              approver_ids: s.approvers.map(a => a.approver),
+              role_ids: s.approvers.map(a => a.role_id),
             })),
             {
               step_name: stepFormData.step_name,
               step_order: stepFormData.step_order,
               is_finance_review: stepFormData.is_finance_review,
-              approver_ids: stepFormData.approver_ids,
+              role_ids: stepFormData.role_ids,
             },
           ];
 
@@ -360,7 +361,7 @@ function WorkflowsAdminPage() {
                         </Box>
                         <Typography variant="caption" color="text.secondary" sx={{ mr: 6 }}>
                           تأییدکنندگان: {step.approvers.length > 0
-                            ? step.approvers.map(a => a.approver_username).join(', ')
+                            ? step.approvers.map(a => a.role_title).join(', ')
                             : 'هیچ‌کدام'}
                         </Typography>
                       </Box>
@@ -419,21 +420,25 @@ function WorkflowsAdminPage() {
           </Box>
           <Autocomplete
             multiple
-            options={users}
-            getOptionLabel={(option) => `${option.first_name || ''} ${option.last_name || ''}`.trim() || option.username}
-            value={users.filter(u => stepFormData.approver_ids.includes(u.id))}
+            options={roles}
+            getOptionLabel={(option) => option.title}
+            value={roles.filter(r => stepFormData.role_ids.includes(r.id))}
             onChange={(_, newValue) => {
-              setStepFormData({ ...stepFormData, approver_ids: newValue.map(u => u.id) });
+              setStepFormData({ ...stepFormData, role_ids: newValue.map(r => r.id) });
             }}
             renderInput={(params) => (
-              <TextField {...params} label="تأییدکنندگان" placeholder="تأییدکنندگان را انتخاب کنید" />
+              <TextField
+                {...params}
+                label="نقش‌های تأییدکننده"
+                placeholder="نقش‌های تأییدکننده را انتخاب کنید"
+              />
             )}
             renderTags={(value, getTagProps) =>
               value.map((option, index) => (
                 <Chip
                   {...getTagProps({ index })}
                   key={option.id}
-                  label={`${option.first_name || ''} ${option.last_name || ''}`.trim() || option.username}
+                  label={option.title}
                 />
               ))
             }

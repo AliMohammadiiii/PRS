@@ -20,7 +20,7 @@ from workflows.serializers import (
 from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
 from teams.models import Team
 from purchase_requests.models import PurchaseRequest
-from accounts.models import User
+from classifications.models import Lookup
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
@@ -53,7 +53,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 queryset=WorkflowStep.objects.filter(is_active=True).order_by('step_order').prefetch_related(
                     Prefetch(
                         'approvers',
-                        queryset=WorkflowStepApprover.objects.filter(is_active=True).select_related('approver')
+                        queryset=WorkflowStepApprover.objects.filter(is_active=True).select_related('role')
                     )
                 )
             )
@@ -128,7 +128,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             is_active=True
         )
         
-        # Create steps with approvers
+        # Create steps with approver roles
         for step_data in steps_data:
             step = WorkflowStep.objects.create(
                 workflow=workflow,
@@ -137,29 +137,27 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 is_finance_review=step_data.get('is_finance_review', False)
             )
             
-            # Assign approvers
-            approver_ids = step_data.get('approver_ids', [])
-            for approver_id in approver_ids:
+            # Assign approver roles (COMPANY_ROLE lookups)
+            role_ids = step_data.get('role_ids', [])
+            for role_id in role_ids:
                 try:
-                    approver = User.objects.get(id=approver_id, is_active=True)
+                    role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
                     WorkflowStepApprover.objects.create(
                         step=step,
-                        approver=approver,
+                        role=role,
                         is_active=True
                     )
-                except User.DoesNotExist:
+                except Lookup.DoesNotExist:
                     continue
         
-        # Validate workflow has at least 2 steps and exactly one finance review step
+        # Validate that at most one finance review step exists.
+        # Note: We intentionally allow creating a workflow with zero steps so that
+        # admins can create the shell workflow first and add steps afterwards.
         steps = WorkflowStep.objects.filter(workflow=workflow, is_active=True)
-        if steps.count() < 2:
-            workflow.delete()
-            raise ValidationError('Workflow must have at least 2 steps: one approval step + Finance Review.')
-        
         finance_steps = steps.filter(is_finance_review=True)
-        if finance_steps.count() != 1:
+        if finance_steps.count() > 1:
             workflow.delete()
-            raise ValidationError('Workflow must have exactly one Finance Review step.')
+            raise ValidationError('Workflow cannot have more than one Finance Review step.')
         
         # Return created workflow
         read_serializer = WorkflowDetailSerializer(workflow)
@@ -205,27 +203,24 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                     is_finance_review=step_data.get('is_finance_review', False)
                 )
                 
-                # Assign approvers
-                approver_ids = step_data.get('approver_ids', [])
-                for approver_id in approver_ids:
+                # Assign approver roles (COMPANY_ROLE lookups)
+                role_ids = step_data.get('role_ids', [])
+                for role_id in role_ids:
                     try:
-                        approver = User.objects.get(id=approver_id, is_active=True)
+                        role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
                         WorkflowStepApprover.objects.create(
                             step=step,
-                            approver=approver,
+                            role=role,
                             is_active=True
                         )
-                    except User.DoesNotExist:
+                    except Lookup.DoesNotExist:
                         continue
             
-            # Validate workflow structure
+            # Validate workflow structure (at most one finance review step).
             steps = WorkflowStep.objects.filter(workflow=instance, is_active=True)
-            if steps.count() < 2:
-                raise ValidationError('Workflow must have at least 2 steps: one approval step + Finance Review.')
-            
             finance_steps = steps.filter(is_finance_review=True)
-            if finance_steps.count() != 1:
-                raise ValidationError('Workflow must have exactly one Finance Review step.')
+            if finance_steps.count() > 1:
+                raise ValidationError('Workflow cannot have more than one Finance Review step.')
         
         # Return updated workflow
         read_serializer = WorkflowDetailSerializer(instance)
@@ -294,17 +289,17 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             is_finance_review=serializer.validated_data.get('is_finance_review', False)
         )
         
-        # Assign approvers
-        approver_ids = request.data.get('approver_ids', [])
-        for approver_id in approver_ids:
+        # Assign approver roles (COMPANY_ROLE lookups)
+        role_ids = request.data.get('role_ids', [])
+        for role_id in role_ids:
             try:
-                approver = User.objects.get(id=approver_id, is_active=True)
+                role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
                 WorkflowStepApprover.objects.create(
                     step=step,
-                    approver=approver,
+                    role=role,
                     is_active=True
                 )
-            except User.DoesNotExist:
+            except Lookup.DoesNotExist:
                 continue
         
         # Validate workflow structure
@@ -318,14 +313,14 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
     @extend_schema(
-        summary="Assign approvers to a workflow step",
-        description="Assigns users as approvers for a specific workflow step.",
+        summary="Assign approver roles to a workflow step",
+        description="Assigns COMPANY_ROLE roles as approvers for a specific workflow step.",
         request={
             'application/json': {
                 'type': 'object',
-                'required': ['approver_ids'],
+                'required': ['role_ids'],
                 'properties': {
-                    'approver_ids': {
+                    'role_ids': {
                         'type': 'array',
                         'items': {'type': 'string', 'format': 'uuid'}
                     }
@@ -341,7 +336,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='steps/(?P<step_id>[^/.]+)/assign-approvers')
     @transaction.atomic
     def assign_approvers(self, request, pk=None, step_id=None):
-        """Assign approvers to a workflow step"""
+        """Assign approver roles to a workflow step"""
         workflow = self.get_object()
         
         # Check for active requests
@@ -352,24 +347,24 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         except WorkflowStep.DoesNotExist:
             raise NotFound('Workflow step not found.')
         
-        approver_ids = request.data.get('approver_ids', [])
-        if not approver_ids:
-            raise ValidationError({'approver_ids': 'approver_ids is required and cannot be empty.'})
+        role_ids = request.data.get('role_ids', [])
+        if not role_ids:
+            raise ValidationError({'role_ids': 'role_ids is required and cannot be empty.'})
         
-        # Remove existing approvers
+        # Remove existing approver roles
         WorkflowStepApprover.objects.filter(step=step, is_active=True).update(is_active=False)
         
-        # Add new approvers
-        for approver_id in approver_ids:
+        # Add new approver roles (COMPANY_ROLE lookups)
+        for role_id in role_ids:
             try:
-                approver = User.objects.get(id=approver_id, is_active=True)
+                role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
                 WorkflowStepApprover.objects.create(
                     step=step,
-                    approver=approver,
+                    role=role,
                     is_active=True
                 )
-            except User.DoesNotExist:
-                raise ValidationError(f'User with ID {approver_id} not found or inactive.')
+            except Lookup.DoesNotExist:
+                raise ValidationError(f'Role with ID {role_id} not found or inactive.')
         
         # Return updated step
         response_serializer = WorkflowStepSerializer(step)

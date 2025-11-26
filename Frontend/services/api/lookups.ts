@@ -34,8 +34,9 @@ export async function deleteLookupType(id: string): Promise<void> {
 }
 
 // Lookups
-export async function getLookups(): Promise<Lookup[]> {
-  const response = await apiRequest.get<any>('/api/lookups/');
+export async function getLookups(typeCode?: string): Promise<Lookup[]> {
+  const url = typeCode ? `/api/lookups/?type=${encodeURIComponent(typeCode)}` : '/api/lookups/';
+  const response = await apiRequest.get<any>(url);
   // Handle both paginated response (with results) and non-paginated array response
   if (Array.isArray(response.data)) {
     return response.data;

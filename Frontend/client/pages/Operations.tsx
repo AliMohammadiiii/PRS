@@ -89,15 +89,6 @@ export default function Operations() {
     <DashboardLayout pageTitle="تعریف عملیاتی" breadcrumb="تعریف عملیاتی">
       <div className="p-4 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="users" className="flex-1">
-              تعریف کاربران
-            </TabsTrigger>
-            <div className="w-px h-5 bg-app-border" />
-            <TabsTrigger value="organization" className="flex-1">
-              تعریف سازمان
-            </TabsTrigger>
-          </TabsList>
 
           <TabsContent value="organization" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-[432px_1fr] gap-4">

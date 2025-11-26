@@ -81,26 +81,39 @@ class WorkflowStep(BaseModel):
 class WorkflowStepApprover(BaseModel):
     """
     Approver assignment to a workflow step.
-    Multiple approvers at a step require all to approve (AND logic).
+    Multiple approver roles at a step require all to approve (AND logic).
     """
     step = models.ForeignKey(WorkflowStep, on_delete=models.CASCADE, related_name='approvers')
-    approver = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='workflow_step_assignments')
+    # NOTE: This used to point directly to `accounts.User`. It is now role-based.
+    # Roles are represented by `classifications.Lookup` with type.code = 'COMPANY_ROLE'.
+    role = models.ForeignKey(
+        'classifications.Lookup',
+        on_delete=models.PROTECT,
+        related_name='workflow_step_roles',
+        null=True,
+        blank=True,
+        help_text='Role required to approve at this step (COMPANY_ROLE lookup).',
+    )
 
     class Meta:
-        unique_together = ('step', 'approver')
+        unique_together = ('step', 'role')
         indexes = [
             models.Index(fields=['step', 'is_active']),
-            models.Index(fields=['approver', 'is_active']),
+            models.Index(fields=['role', 'is_active']),
         ]
 
     def clean(self):
         # Step must be active
         if self.step and not self.step.is_active:
             raise ValidationError('Step must be active.')
-        # Approver must be active
-        if self.approver and not self.approver.is_active:
-            raise ValidationError('Approver must be active.')
+        # Role must be present, active and of correct type
+        if not self.role:
+            raise ValidationError('Workflow step approver must have a role assigned.')
+        if not self.role.is_active:
+            raise ValidationError('Role must be active.')
+        if getattr(getattr(self.role, 'type', None), 'code', None) != 'COMPANY_ROLE':
+            raise ValidationError('Workflow step roles must use COMPANY_ROLE lookups.')
 
     def __str__(self) -> str:
-        return f'{self.step} - {self.approver}'
+        return f'{self.step} - role {self.role.code}'
 
