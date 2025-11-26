@@ -9,14 +9,19 @@ import {
   ArrowDown2,
   ArrowUp2,
   Chart2,
+  AddSquare,
+  DocumentText1,
+  TickCircle,
+  Wallet3,
 } from 'iconsax-reactjs';
 import { Box, Image, Typography } from 'injast-core/components';
 import { defaultColors } from 'injast-core/constants';
 import { INITIAL_LIMIT } from 'src/shared/constants';
 import { useAuth } from 'src/client/contexts/AuthContext';
+import { hasRole, isRequesterOnlyUser } from 'src/shared/utils/prsUtils';
 
-// Logo will be loaded from assets or Figma URL
-const sideBarLogo = 'https://www.figma.com/api/mcp/asset/3a702fa0-5a2c-4d61-b022-4632e612cbd7';
+// Logo - served from Vite/React `public` folder root
+const sideBarLogo = '/Navigationlogo.svg';
 
 type MenuItemProps = {
   isActive: boolean;
@@ -155,55 +160,58 @@ interface MenuEntry {
 // Admin menu configuration
 const adminMenuConfig: MenuEntry[] = [
   {
-    key: 'reports',
-    to: '/reports',
-    search: {
-      page: 1,
-      limit: INITIAL_LIMIT,
-    },
-    title: 'گزارش‌ها',
-    icon: Chart2,
-  },
-  {
-    key: 'define-basic-info',
-    to: '/basic-info',
-    title: 'تعریف اطلاعات پایه',
-    icon: DocumentText,
+    key: 'prs-new-request',
+    to: '/prs/requests/new',
+    title: 'ثبت درخواست خرید',
+    icon: AddSquare,
     disabled: false,
   },
   {
-    key: 'define-reports',
-    to: '/',
-    title: 'تعریف گزارش ها',
-    icon: DocumentText,
-    hasDropdown: true,
+    key: 'prs-my-requests',
+    to: '/prs/my-requests',
+    // Admin sees global list, so label is generic
+    title: 'درخواست‌ها',
+    icon: DocumentText1,
     disabled: false,
-    subItems: [
-      {
-        key: 'define-group',
-        to: '/groups',
-        title: 'تعریف گروه',
-      },
-      {
-        key: 'define-report-titles',
-        to: '/report-titles',
-        title: 'تعریف عناوین گزارشات',
-      },
-    ],
   },
   {
-    key: 'define-operational',
-    to: '/operations',
-    title: 'تعریف عملیاتی',
+    key: 'prs-inbox',
+    to: '/prs/inbox',
+    // Admin sees global approvals inbox, so label is generic
+    title: 'تأییدها',
+    icon: TickCircle,
+    disabled: false,
+  },
+  {
+    key: 'prs-finance',
+    to: '/prs/finance',
+    title: 'صندوق مالی',
+    icon: Wallet3,
+    disabled: false,
+  },
+  // UA-03: Admin navigation – admin-only configuration / management pages.
+  // Admins should be able to manage PRS-related master data in addition to
+  // using requester/approver features.
+  {
+    key: 'prs-admin-teams',
+    to: '/prs/admin/teams',
+    title: 'مدیریت تیم‌ها',
     icon: Setting2,
     disabled: false,
   },
   {
-    key: 'send-notification',
-    to: '/',
-    title: 'ارسال اعلان‌',
-    icon: NotificationBing,
-    disabled: true,
+    key: 'prs-admin-form-templates',
+    to: '/prs/admin/form-templates',
+    title: 'قالب‌های فرم',
+    icon: Setting2,
+    disabled: false,
+  },
+  {
+    key: 'prs-admin-workflows',
+    to: '/prs/admin/workflows',
+    title: 'گردش‌های کار',
+    icon: Setting2,
+    disabled: false,
   },
   {
     key: 'change-password',
@@ -214,31 +222,67 @@ const adminMenuConfig: MenuEntry[] = [
   },
 ];
 
-// Non-admin menu configuration (simplified)
-const userMenuConfig: MenuEntry[] = [
+// Requester-only menu configuration
+// (UA-01: "ثبت درخواست خرید" + "درخواست‌های من")
+const requesterMenuConfig: MenuEntry[] = [
   {
-    key: 'reports',
-    to: '/reports',
-    search: {
-      page: 1,
-      limit: INITIAL_LIMIT,
-    },
-    title: 'گزارش‌ها',
-    icon: Chart2,
-  },
-  {
-    key: 'company-basic-info',
-    to: '/company-basic-info',
-    title: 'اطلاعات پایه شرکت',
-    icon: DocumentText,
+    key: 'prs-new-request',
+    to: '/prs/requests/new',
+    title: 'ثبت درخواست خرید',
+    icon: AddSquare,
     disabled: false,
   },
   {
-    key: 'notifications',
-    to: '/',
-    title: 'اعلان‌ها',
-    icon: NotificationBing,
-    disabled: true,
+    key: 'prs-my-requests',
+    to: '/prs/my-requests',
+    title: 'درخواست‌های من',
+    icon: DocumentText1,
+    disabled: false,
+  },
+];
+
+// Approver (non-admin) menu configuration:
+// Focus on approvals inbox; optionally allow "My Requests".
+const approverMenuConfig: MenuEntry[] = [
+  {
+    key: 'prs-inbox',
+    to: '/prs/inbox',
+    title: 'تأییدهای من',
+    icon: TickCircle,
+    disabled: false,
+  },
+  {
+    key: 'prs-my-requests',
+    to: '/prs/my-requests',
+    title: 'درخواست‌های من',
+    icon: DocumentText1,
+    disabled: false,
+  },
+  {
+    key: 'change-password',
+    to: '/change-password',
+    title: 'تغییر رمز عبور',
+    icon: Lock1,
+    disabled: false,
+  },
+];
+
+// Finance-only menu configuration:
+// Focus on finance inbox; optionally allow "My Requests".
+const financeMenuConfig: MenuEntry[] = [
+  {
+    key: 'prs-finance',
+    to: '/prs/finance',
+    title: 'صندوق مالی',
+    icon: Wallet3,
+    disabled: false,
+  },
+  {
+    key: 'prs-my-requests',
+    to: '/prs/my-requests',
+    title: 'درخواست‌های من',
+    icon: DocumentText1,
+    disabled: false,
   },
   {
     key: 'change-password',
@@ -253,10 +297,26 @@ const SideBar = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
-  
-  // Determine which menu config to use based on user type
+
+  // Determine which menu config to use based on user type / roles
   const isAdmin = user?.is_admin ?? false;
-  const menuConfig = isAdmin ? adminMenuConfig : userMenuConfig;
+  const isApprover = !!user && hasRole(user, 'APPROVER');
+  const isFinance = !!user && hasRole(user, 'FINANCE');
+  const isRequesterOnly = !!user && isRequesterOnlyUser(user);
+
+  let menuConfig: MenuEntry[] = adminMenuConfig;
+  if (!isAdmin) {
+    if (isFinance) {
+      menuConfig = financeMenuConfig;
+    } else if (isApprover) {
+      menuConfig = approverMenuConfig;
+    } else if (isRequesterOnly) {
+      menuConfig = requesterMenuConfig;
+    } else {
+      // Fallback for unknown role patterns: use requester menu (safe default)
+      menuConfig = requesterMenuConfig;
+    }
+  }
 
   // Auto-expand menu if current route matches a sub-item
   useEffect(() => {

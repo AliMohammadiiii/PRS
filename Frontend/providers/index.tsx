@@ -7,6 +7,8 @@ import { coreFaIR } from 'injast-core/utils';
 import { AuthProvider } from 'src/client/contexts/AuthContext';
 import { CompanyProvider } from 'src/client/contexts/CompanyContext';
 import { FinancialPeriodProvider } from 'src/client/contexts/FinancialPeriodContext';
+import { TeamProvider } from 'src/client/contexts/TeamContext';
+import ThemeAlphaWrapper from 'src/theme/themeWrapper';
 
 export default function Providers({ children }: Readonly<{ children: ReactNode }>) {
   const options = {
@@ -15,18 +17,22 @@ export default function Providers({ children }: Readonly<{ children: ReactNode }
   };
   return (
     <SPAThemeProvider dir="rtl" appColors={appColors} themeOptions={options}>
-      <MessageProvider
-        width="350px"
-        toastPosition={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <AuthProvider>
-          <CompanyProvider>
-            <FinancialPeriodProvider>
-              {children}
-            </FinancialPeriodProvider>
-          </CompanyProvider>
-        </AuthProvider>
-      </MessageProvider>
+      <ThemeAlphaWrapper>
+        <MessageProvider
+          width="350px"
+          toastPosition={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <AuthProvider>
+            <CompanyProvider>
+              <FinancialPeriodProvider>
+                <TeamProvider>
+                  {children}
+                </TeamProvider>
+              </FinancialPeriodProvider>
+            </CompanyProvider>
+          </AuthProvider>
+        </MessageProvider>
+      </ThemeAlphaWrapper>
     </SPAThemeProvider>
   );
 }

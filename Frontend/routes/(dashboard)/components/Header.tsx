@@ -12,36 +12,14 @@ import { defaultColors } from 'injast-core/constants';
 import { longFormatInWords } from 'injast-core/utils';
 import { useAuth } from 'src/client/contexts/AuthContext';
 import { useCompany } from 'src/client/contexts/CompanyContext';
-import { useFinancialPeriod } from 'src/client/contexts/FinancialPeriodContext';
+import { useTeam } from 'src/client/contexts/TeamContext';
 import { useNavigate } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
-import * as periodApi from 'src/services/api/periods';
-import { FinancialPeriod } from 'src/types/api/periods';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const { selectedCompany, accessibleCompanies, selectCompany } = useCompany();
-  const { selectedFinancialPeriodId, setSelectedFinancialPeriodId, setSelectedFinancialPeriod } = useFinancialPeriod();
+  const { selectedTeam, teams, selectTeam } = useTeam();
   const navigate = useNavigate();
-  const [financialPeriods, setFinancialPeriods] = useState<FinancialPeriod[]>([]);
-
-  useEffect(() => {
-    const loadFinancialPeriods = async () => {
-      try {
-        const periods = await periodApi.getFinancialPeriods();
-        const activePeriods = periods.filter(p => p.is_active);
-        setFinancialPeriods(activePeriods);
-        if (activePeriods.length > 0 && !selectedFinancialPeriodId) {
-          const firstPeriod = activePeriods[0];
-          setSelectedFinancialPeriodId(firstPeriod.id);
-          setSelectedFinancialPeriod(firstPeriod);
-        }
-      } catch (error) {
-        logger.error('Error loading financial periods:',  error);
-      }
-    };
-    loadFinancialPeriods();
-  }, [selectedFinancialPeriodId, setSelectedFinancialPeriodId, setSelectedFinancialPeriod]);
 
   const getToday = () => {
     const persianWeekday = new Date(Date.now()).toLocaleDateString('fa-IR', {
@@ -155,15 +133,15 @@ const Header = () => {
                     </Select>
                   )}
 
-                  {/* Financial Period Dropdown */}
-                  {financialPeriods.length > 0 && (
+                  {/* Team Dropdown (PRS) */}
+                  {teams.length > 0 && (
                     <Select
-                      value={selectedFinancialPeriodId || ''}
+                      value={selectedTeam?.id || ''}
                       onChange={(e) => {
-                        const periodId = e.target.value as string;
-                        const period = financialPeriods.find(p => p.id === periodId);
-                        setSelectedFinancialPeriodId(periodId);
-                        setSelectedFinancialPeriod(period || null);
+                        const team = teams.find((t) => t.id === e.target.value);
+                        if (team) {
+                          selectTeam(team);
+                        }
                       }}
                       size="small"
                       height={48}
@@ -192,9 +170,9 @@ const Header = () => {
                         />
                       )}
                     >
-                      {financialPeriods.map((period) => (
-                        <MenuItem key={period.id} value={period.id}>
-                          {period.title}
+                      {teams.map((team) => (
+                        <MenuItem key={team.id} value={team.id}>
+                          {team.name}
                         </MenuItem>
                       ))}
                     </Select>

@@ -265,7 +265,7 @@ export default function Login() {
                 </Typography>
               </Button>
 
-          {/* Terms and Conditions */}
+          {/* Terms and Conditions (static text only; no navigation wired yet) */}
           <Typography
             sx={{
               fontSize: 12,
@@ -279,11 +279,6 @@ export default function Login() {
             <span
               style={{
                 color: PRIMARY_COLOR,
-                cursor: "pointer",
-              }}
-              onClick={() => {
-                // TODO: Open terms and conditions
-                
               }}
             >
               قوانین و مقررات

@@ -9,11 +9,12 @@ import { defaultColors } from 'injast-core/constants';
 import { User, Lock1, Eye, EyeSlash, CloseCircle } from 'iconsax-reactjs';
 import { appColors } from 'src/theme/colors';
 import { getAccessToken } from 'src/client/contexts/AuthContext';
+import { hasRole } from 'src/shared/utils/prsUtils';
+import type { UserMeResponse } from 'src/types/api/auth';
+import * as authApi from 'src/services/api/auth';
 
-// Logo - using placeholder for now to avoid cross-site cookie issues
-// In production, this will be served from /cfowise/placeholder.svg
-// In development, it will be served from /placeholder.svg
-const logoUrl = import.meta.env.PROD ? '/cfowise/placeholder.svg' : '/placeholder.svg';
+// Logo - use specific login SVG logo from public assets
+const logoUrl = import.meta.env.PROD ? '/cfowise/LoginLogo.svg' : '/LoginLogo.svg';
 
 const schema = z.object({
   username: z.string().min(1, 'نام کاربری الزامی است'),
@@ -22,13 +23,36 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+// Centralised helper so login submit & login route guard use the same logic
+const getDefaultLandingRoute = (u: UserMeResponse): string => {
+  if (u.is_admin || hasRole(u, 'ADMIN')) {
+    // Admins can see everything; route them to approvals inbox
+    return '/prs/inbox';
+  }
+  if (hasRole(u, 'APPROVER')) {
+    // Approvers land on their approvals inbox (UA-02)
+    return '/prs/inbox';
+  }
+  // Requesters land on "My Requests" (UA-01 expectation)
+  return '/prs/my-requests';
+};
+
 export const Route = createFileRoute('/login')({
-  beforeLoad: () => {
+  beforeLoad: async () => {
     const token = getAccessToken();
-    if (token) {
+    if (!token) return;
+
+    try {
+      // Use the same role-based landing rules as the login submit handler
+      const user = await authApi.getMe();
+      const target = getDefaultLandingRoute(user);
+
       throw redirect({
-        to: '/reports',
+        to: target,
       });
+    } catch {
+      // If we can't fetch the user (e.g. token expired), let the user see the login page
+      return;
     }
   },
   component: LoginPage,
@@ -59,9 +83,9 @@ function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(data.username, data.password);
-      // Redirect to /reports after successful login
-      navigate({ to: '/reports' });
+      const user = await login(data.username, data.password);
+
+      navigate({ to: getDefaultLandingRoute(user) });
     } catch (err: any) {
       setError(
         err.response?.data?.detail ||
@@ -251,7 +275,7 @@ function LoginPage() {
             </Box>
           )}
 
-          {/* Forgot Password Link */}
+          {/* Forgot Password Link (UI only; backend flow not yet implemented) */}
           <Box
             sx={{
               display: 'flex',
@@ -262,9 +286,7 @@ function LoginPage() {
             <Typography
               component="button"
               type="button"
-              onClick={() => {
-                // TODO: Implement forgot password functionality
-              }}
+              onClick={() => {}}
               sx={{
                 fontSize: '12px',
                 fontWeight: 700,
@@ -309,7 +331,7 @@ function LoginPage() {
             تأیید و ادامه
           </Button>
 
-          {/* Terms and Conditions */}
+          {/* Terms and Conditions (static text only; no navigation wired yet) */}
           <Box
             sx={{
               display: 'flex',
@@ -337,9 +359,7 @@ function LoginPage() {
                   color: appColors.primary.main,
                   cursor: 'pointer',
                 }}
-                onClick={() => {
-                  // TODO: Navigate to terms and conditions
-                }}
+                onClick={() => {}}
               >
                 قوانین و مقررات
               </Typography>{' '}

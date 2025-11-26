@@ -417,7 +417,10 @@ class ReportSubmissionGroupBasicSerializer(serializers.ModelSerializer):
     Basic serializer for ReportSubmissionGroup that doesn't include submissions.
     Used to avoid circular serialization when included in SubmissionReadSerializer.
     """
-    status = LookupSerializer(read_only=True)
+    company = OrgNodeSerializer(read_only=True, allow_null=True)
+    financial_period = FinancialPeriodSerializer(read_only=True, allow_null=True)
+    reporting_period = LookupSerializer(read_only=True, allow_null=True)
+    status = LookupSerializer(read_only=True, allow_null=True)
     
     class Meta:
         model = ReportSubmissionGroup

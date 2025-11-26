@@ -1,5 +1,6 @@
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from accounts.models import AccessScope
+from classifications.models import Lookup
 
 
 class HasOrgAccess(BasePermission):
@@ -103,4 +104,113 @@ class HasCompanyAccess(BasePermission):
             org_node=obj,
             is_active=True
         ).exists()
+
+
+class IsSystemAdmin(BasePermission):
+    """
+    Permission class for System Admin role.
+    System Admins have full control over system configuration, all teams, all users, all workflows, all forms.
+    
+    For now, checks is_staff or is_superuser. In future, can check for specific role lookup.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # Superusers are always System Admins
+        if request.user.is_superuser:
+            return True
+        # Check for System Admin role via AccessScope
+        # For now, also allow staff users as System Admins
+        if request.user.is_staff:
+            return True
+        # Future: Check for specific role lookup
+        # return AccessScope.objects.filter(
+        #     user=request.user,
+        #     role__type__code='PRS_ROLE',
+        #     role__code='SYSTEM_ADMIN',
+        #     is_active=True
+        # ).exists()
+        return False
+
+
+class IsWorkflowAdmin(BasePermission):
+    """
+    Permission class for Workflow Admin role.
+    Workflow Admins can create/modify workflows & forms for assigned teams only.
+    
+    Checks if user has Workflow Admin role for any team (or is System Admin).
+    For team-specific operations, use object-level permission checking.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # System Admins are also Workflow Admins
+        if IsSystemAdmin().has_permission(request, view):
+            return True
+        # Future: Check for Workflow Admin role via AccessScope
+        # return AccessScope.objects.filter(
+        #     user=request.user,
+        #     role__type__code='PRS_ROLE',
+        #     role__code='WORKFLOW_ADMIN',
+        #     is_active=True
+        # ).exists()
+        return False
+
+
+class IsInitiator(BasePermission):
+    """
+    Permission class for Initiator role.
+    Initiators can create & submit purchase requests for their assigned teams.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # System Admins and Workflow Admins can also initiate
+        if IsSystemAdmin().has_permission(request, view):
+            return True
+        if IsWorkflowAdmin().has_permission(request, view):
+            return True
+        # Future: Check for Initiator role via AccessScope
+        # return AccessScope.objects.filter(
+        #     user=request.user,
+        #     role__type__code='PRS_ROLE',
+        #     role__code='INITIATOR',
+        #     is_active=True
+        # ).exists()
+        # For now, allow all authenticated users to be Initiators
+        return True
+
+
+class IsApprover(BasePermission):
+    """
+    Permission class for Approver role.
+    Approvers can approve/reject requests at assigned workflow step(s).
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # System Admins and Workflow Admins can also approve
+        if IsSystemAdmin().has_permission(request, view):
+            return True
+        if IsWorkflowAdmin().has_permission(request, view):
+            return True
+        # Future: Check for Approver role via AccessScope
+        # For now, allow all authenticated users (specific step access is checked in views)
+        return True
+
+
+class IsFinanceReviewer(BasePermission):
+    """
+    Permission class for Finance Reviewer role.
+    Finance Reviewers can final review and completion of fully approved requests.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # System Admins can also complete requests
+        if IsSystemAdmin().has_permission(request, view):
+            return True
+        # Future: Check for Finance Reviewer role via AccessScope
+        # For now, allow all authenticated users (specific step access is checked in views)
+        return True
 

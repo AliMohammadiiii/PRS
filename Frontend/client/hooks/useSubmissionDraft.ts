@@ -76,7 +76,7 @@ export function useSubmissionDraft() {
     currentFieldValues: Record<string, any>
   ): Promise<string | null> => {
     try {
-      // Convert field values to API format
+      // Convert field values to API format (shared with both create and update flows)
       const fieldsData = fields
         .map((field) => {
           const value = currentFieldValues[field.id];
@@ -95,79 +95,29 @@ export function useSubmissionDraft() {
 
       if (submissionId) {
         // Update existing submission
-        if (hasFiles) {
-          // For file uploads, we need to use FormData
-          const formData = new FormData();
-          
-          // Build fields array - mix of JSON strings for non-files and FormData entries for files
-          // Backend expects fields as an array, so we'll send it as JSON string for non-files
-          // and append files separately
-          const fieldsArray: any[] = [];
-          
-          fieldsData.forEach((fieldData) => {
-            if (fieldData.value_file instanceof File) {
-              // For files, we'll append them separately
-              fieldsArray.push({
-                field_id: fieldData.field_id,
-                value_file: fieldData.value_file, // This will be handled separately
-              });
-            } else {
-              // For non-files, include in JSON
-              fieldsArray.push(fieldData);
-            }
-          });
-          
-          // Append fields as JSON (without files)
-          const nonFileFields = fieldsData.filter(f => !(f.value_file instanceof File));
-          formData.append('fields', JSON.stringify(nonFileFields));
-          
-          // Append files with proper field structure
-          fieldsData.forEach((fieldData) => {
-            if (fieldData.value_file instanceof File) {
-              formData.append('fields', JSON.stringify({
-                field_id: fieldData.field_id,
-              }));
-              // The file will be sent separately - backend should handle this
-              // For now, we'll try a different approach
-            }
-          });
+        // For now, file fields are not handled differently here – callers should
+        // manage file uploads explicitly, and this hook focuses on non-file data.
+        const nonFileFields = hasFiles
+          ? fieldsData.filter(f => !(f as any).value_file instanceof File)
+          : fieldsData;
 
-          // Actually, let's try sending all fields as JSON and files separately
-          // This is a workaround - proper implementation would need backend support
-          await updateSubmission(submissionId, {
-            fields: nonFileFields,
-          } as any);
-        } else {
-          await updateSubmission(submissionId, {
-            fields: fieldsData,
-          });
-        }
+        await updateSubmission(submissionId, {
+          fields: nonFileFields,
+        } as any);
       } else {
         // Create new submission
-        if (hasFiles) {
-          // For now, skip file fields on create - they can be added in update
-          // This is a limitation - file uploads need special handling
-          const nonFileFields = fieldsData.filter(f => !(f.value_file instanceof File));
-          const submission = await createSubmission({
-            report: reportId,
-            company: companyId,
-            financial_period: financialPeriodId,
-            reporting_period: reportingPeriodId,
-            fields: nonFileFields,
-          });
-          submissionId = submission.id;
-          
-          // TODO: Update with file fields separately if needed
-        } else {
-          const submission = await createSubmission({
-            report: reportId,
-            company: companyId,
-            financial_period: financialPeriodId,
-            reporting_period: reportingPeriodId,
-            fields: fieldsData,
-          });
-          submissionId = submission.id;
-        }
+        const nonFileFields = hasFiles
+          ? fieldsData.filter(f => !(f as any).value_file instanceof File)
+          : fieldsData;
+
+        const submission = await createSubmission({
+          report: reportId,
+          company: companyId,
+          financial_period: financialPeriodId,
+          reporting_period: reportingPeriodId,
+          fields: nonFileFields,
+        } as any);
+        submissionId = submission.id;
         
         const newSubmissionIds = { ...submissionIdsRef.current, [reportId]: submissionId };
         submissionIdsRef.current = newSubmissionIds;

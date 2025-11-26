@@ -14,13 +14,26 @@ function RootComponent() {
   useEffect(() => {
     // Only load devtools in development
     if (import.meta.env.DEV) {
-      import('@tanstack/react-router-devtools')
-        .then((module) => {
-          setDevtools(() => module.TanStackRouterDevtools);
-        })
-        .catch(() => {
-          // Devtools not available
-        });
+      // Use a timeout to ensure React is fully loaded
+      const timer = setTimeout(() => {
+        import('@tanstack/react-router-devtools')
+          .then((module) => {
+            if (module?.TanStackRouterDevtools) {
+              setDevtools(() => module.TanStackRouterDevtools);
+            }
+          })
+          .catch((error) => {
+            // Devtools not available or incompatible - silently fail
+            // This can happen with React 19 compatibility issues
+            if (error.message?.includes('jsx') || error.message?.includes('jsx-runtime')) {
+              console.warn('Router devtools not compatible with current React version');
+            } else {
+              console.warn('Router devtools could not be loaded:', error);
+            }
+          });
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -29,7 +42,7 @@ function RootComponent() {
       sx={{
         width: '100vw',
         height: '100vh',
-        overflow: 'hidden',
+        overflow: 'auto',
       }}
     >
       <Outlet />

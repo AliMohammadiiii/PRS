@@ -18,9 +18,9 @@ class UserAdmin(admin.ModelAdmin):
 
 @admin.register(AccessScope)
 class AccessScopeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'org_node', 'role', 'position_title', 'is_active')
-    list_filter = ('role', 'is_active')
-    search_fields = ('user__username', 'org_node__name', 'position_title')
+    list_display = ('user', 'team', 'org_node', 'role', 'position_title', 'is_active')
+    list_filter = ('role', 'is_active', 'team')
+    search_fields = ('user__username', 'team__name', 'org_node__name', 'position_title')
     readonly_fields = ('created_at', 'updated_at')
 
 from django.contrib import admin

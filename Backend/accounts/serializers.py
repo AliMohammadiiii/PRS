@@ -45,8 +45,9 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AccessScopeSerializer(serializers.ModelSerializer):
     # Read-only helper fields for better API responses
-    org_name = serializers.CharField(source='org_node.name', read_only=True)
-    org_code = serializers.CharField(source='org_node.code', read_only=True)
+    org_name = serializers.CharField(source='org_node.name', read_only=True, allow_null=True)
+    org_code = serializers.CharField(source='org_node.code', read_only=True, allow_null=True)
+    team_name = serializers.CharField(source='team.name', read_only=True, allow_null=True)
     role_code = serializers.CharField(source='role.code', read_only=True)
     role_title = serializers.CharField(source='role.title', read_only=True)
 
@@ -58,6 +59,8 @@ class AccessScopeSerializer(serializers.ModelSerializer):
             'org_node',
             'org_name',
             'org_code',
+            'team',
+            'team_name',
             'role',
             'role_code',
             'role_title',
@@ -84,8 +87,24 @@ class UserMeSerializer(serializers.ModelSerializer):
         return bool(obj.is_superuser or obj.is_staff)
 
     def get_roles(self, obj):
+        """
+        Return a de-duplicated list of role *codes* for the current user.
+
+        The frontend relies on stable, uppercase codes such as
+        'REQUESTER', 'APPROVER', 'ADMIN' for role-based navigation
+        and redirects, so we expose `role.code` here instead of the
+        (possibly localised) `role.title`.
+        """
         try:
-            return list(set([scope.role.title for scope in obj.access_scopes.filter(is_active=True).select_related('role')]))
+            return list(
+                set(
+                    [
+                        scope.role.code
+                        for scope in obj.access_scopes.filter(is_active=True).select_related("role")
+                        if scope.role and scope.role.code
+                    ]
+                )
+            )
         except Exception:
             return []
 
@@ -138,6 +157,55 @@ class UserMeSerializer(serializers.ModelSerializer):
             return company_roles
         except Exception:
             return {}
+
+
+class UserWithTeamsSerializer(serializers.ModelSerializer):
+    """Serializer for reading users with their team assignments"""
+    teams = serializers.SerializerMethodField()
+    access_scopes = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'first_name',
+            'last_name',
+            'email',
+            'mobile_phone',
+            'national_code',
+            'is_active',
+            'is_staff',
+            'is_superuser',
+            'teams',
+            'access_scopes',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_teams(self, obj):
+        """Get list of teams the user belongs to"""
+        try:
+            from teams.serializers import TeamSerializer
+            team_ids = AccessScope.objects.filter(
+                user=obj,
+                team__isnull=False,
+                is_active=True
+            ).values_list('team_id', flat=True).distinct()
+            from teams.models import Team
+            teams = Team.objects.filter(id__in=team_ids, is_active=True)
+            return TeamSerializer(teams, many=True).data
+        except Exception:
+            return []
+    
+    def get_access_scopes(self, obj):
+        """Get active access scopes for the user"""
+        try:
+            active_scopes = obj.access_scopes.filter(is_active=True).select_related('team', 'org_node', 'role')
+            return AccessScopeSerializer(active_scopes, many=True).data
+        except Exception:
+            return []
 
 
 class ChangePasswordSerializer(serializers.Serializer):

@@ -14,7 +14,8 @@ export default defineConfig(({ mode }) => ({
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],
     },
   },
-  base: process.env.NODE_ENV === "production" ? "/cfowise/" : "/",
+  // In production PRS is served from https://innovation.nntc.io/PRS/
+  base: process.env.NODE_ENV === "production" ? "/PRS/" : "/",
   build: {
     outDir: "dist/spa",
     sourcemap: process.env.NODE_ENV === "production" ? "hidden" : true,
@@ -49,7 +50,9 @@ export default defineConfig(({ mode }) => ({
     target: "es2015",
   },
   plugins: [
-    react(),
+    react({
+      jsxRuntime: 'automatic',
+    }),
     TanStackRouterVite({
       routesDirectory: "./routes",
       generatedRouteTree: "./routes/routeTree.gen.ts",
@@ -68,6 +71,16 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     exclude: ["next/navigation"],
+    include: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "@tanstack/react-router-devtools",
+    ],
+    esbuildOptions: {
+      jsx: 'automatic',
+      jsxImportSource: 'react',
+    },
   },
   ssr: {
     external: ["next/navigation"],

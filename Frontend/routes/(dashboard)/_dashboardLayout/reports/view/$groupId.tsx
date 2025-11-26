@@ -3,7 +3,7 @@ import logger from "@/lib/logger";
 import { useState, useEffect } from 'react';
 import { Box, CircularProgress, Typography, Button } from 'injast-core/components';
 import { useErrorHandler } from 'injast-core/hooks';
-import PageHeader from '../../../components/PageHeader';
+import PageHeader from 'src/routes/(dashboard)/components/PageHeader';
 import { getSubmissionGroup, getSubmissionsByGroup } from 'src/services/api/submissions';
 import { updateReportSubmissionGroup } from 'src/services/api/reportSubmissionGroups';
 import { ReportSubmissionGroup, Submission } from 'src/types/api/workflow';

@@ -40,8 +40,10 @@ const configs: Record<Environment, Config> = {
     token,
   },
   PROD: {
-    apiBaseUrl: '/cfowise',  // Endpoints already include /api prefix
-    appName: 'CFOWise',
+    // PRS is deployed under https://innovation.nntc.io/PRS/
+    // Endpoints already include /api prefix
+    apiBaseUrl: '/PRS',
+    appName: 'PRS',
     appVersion: '1.0.0',
     appLang: 'fa-IR',
     token,

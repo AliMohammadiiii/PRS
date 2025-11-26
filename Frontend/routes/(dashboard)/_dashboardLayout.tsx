@@ -23,12 +23,13 @@ function RouteComponent() {
       <Grid size={2} sx={{ height: '100%' }}>
         <SideBar />
       </Grid>
-      <Grid size={10}>
+      <Grid size={10} sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <Header />
         <Box
           sx={{
             bgcolor: defaultColors.neutral[50],
-            height: '100%',
+            flex: 1,
+            overflow: 'auto',
             py: 4,
             px: 3,
           }}

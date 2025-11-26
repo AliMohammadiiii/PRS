@@ -23,8 +23,16 @@ import { Route as dashboardDashboardLayoutBasicInfoIndexRouteImport } from './(d
 import { Route as dashboardDashboardLayoutAdminReviewIndexRouteImport } from './(dashboard)/_dashboardLayout/admin-review/index'
 import { Route as dashboardDashboardLayoutAdminReviewGroupIdRouteImport } from './(dashboard)/_dashboardLayout/admin-review/$groupId'
 import { Route as dashboardDashboardLayoutReportsSubmitIndexRouteImport } from './(dashboard)/_dashboardLayout/reports/submit/index'
+import { Route as dashboardDashboardLayoutPrsMyRequestsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/my-requests/index'
+import { Route as dashboardDashboardLayoutPrsInboxIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/inbox/index'
+import { Route as dashboardDashboardLayoutPrsFinanceIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/finance/index'
 import { Route as dashboardDashboardLayoutReportsViewGroupIdRouteImport } from './(dashboard)/_dashboardLayout/reports/view/$groupId'
 import { Route as dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRouteImport } from './(dashboard)/_dashboardLayout/report-titles/$reportTitleId/define-field/index'
+import { Route as dashboardDashboardLayoutPrsRequestsNewIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/requests/new/index'
+import { Route as dashboardDashboardLayoutPrsRequestsRequestIdIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/requests/$requestId/index'
+import { Route as dashboardDashboardLayoutPrsAdminWorkflowsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/workflows/index'
+import { Route as dashboardDashboardLayoutPrsAdminTeamsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/teams/index'
+import { Route as dashboardDashboardLayoutPrsAdminFormTemplatesIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/form-templates/index'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -107,6 +115,24 @@ const dashboardDashboardLayoutReportsSubmitIndexRoute =
     path: '/reports/submit/',
     getParentRoute: () => dashboardDashboardLayoutRoute,
   } as any)
+const dashboardDashboardLayoutPrsMyRequestsIndexRoute =
+  dashboardDashboardLayoutPrsMyRequestsIndexRouteImport.update({
+    id: '/prs/my-requests/',
+    path: '/prs/my-requests/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsInboxIndexRoute =
+  dashboardDashboardLayoutPrsInboxIndexRouteImport.update({
+    id: '/prs/inbox/',
+    path: '/prs/inbox/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsFinanceIndexRoute =
+  dashboardDashboardLayoutPrsFinanceIndexRouteImport.update({
+    id: '/prs/finance/',
+    path: '/prs/finance/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
 const dashboardDashboardLayoutReportsViewGroupIdRoute =
   dashboardDashboardLayoutReportsViewGroupIdRouteImport.update({
     id: '/reports/view/$groupId',
@@ -121,6 +147,36 @@ const dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute =
       getParentRoute: () => dashboardDashboardLayoutRoute,
     } as any,
   )
+const dashboardDashboardLayoutPrsRequestsNewIndexRoute =
+  dashboardDashboardLayoutPrsRequestsNewIndexRouteImport.update({
+    id: '/prs/requests/new/',
+    path: '/prs/requests/new/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute =
+  dashboardDashboardLayoutPrsRequestsRequestIdIndexRouteImport.update({
+    id: '/prs/requests/$requestId/',
+    path: '/prs/requests/$requestId/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute =
+  dashboardDashboardLayoutPrsAdminWorkflowsIndexRouteImport.update({
+    id: '/prs/admin/workflows/',
+    path: '/prs/admin/workflows/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsAdminTeamsIndexRoute =
+  dashboardDashboardLayoutPrsAdminTeamsIndexRouteImport.update({
+    id: '/prs/admin/teams/',
+    path: '/prs/admin/teams/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute =
+  dashboardDashboardLayoutPrsAdminFormTemplatesIndexRouteImport.update({
+    id: '/prs/admin/form-templates/',
+    path: '/prs/admin/form-templates/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -136,7 +192,15 @@ export interface FileRoutesByFullPath {
   '/report-titles': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/reports': typeof dashboardDashboardLayoutReportsIndexRoute
   '/reports/view/$groupId': typeof dashboardDashboardLayoutReportsViewGroupIdRoute
+  '/prs/finance': typeof dashboardDashboardLayoutPrsFinanceIndexRoute
+  '/prs/inbox': typeof dashboardDashboardLayoutPrsInboxIndexRoute
+  '/prs/my-requests': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/reports/submit': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
+  '/prs/admin/form-templates': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/prs/admin/teams': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
+  '/prs/admin/workflows': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
+  '/prs/requests/$requestId': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
+  '/prs/requests/new': typeof dashboardDashboardLayoutPrsRequestsNewIndexRoute
   '/report-titles/$reportTitleId/define-field': typeof dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute
 }
 export interface FileRoutesByTo {
@@ -153,7 +217,15 @@ export interface FileRoutesByTo {
   '/report-titles': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/reports': typeof dashboardDashboardLayoutReportsIndexRoute
   '/reports/view/$groupId': typeof dashboardDashboardLayoutReportsViewGroupIdRoute
+  '/prs/finance': typeof dashboardDashboardLayoutPrsFinanceIndexRoute
+  '/prs/inbox': typeof dashboardDashboardLayoutPrsInboxIndexRoute
+  '/prs/my-requests': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/reports/submit': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
+  '/prs/admin/form-templates': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/prs/admin/teams': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
+  '/prs/admin/workflows': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
+  '/prs/requests/$requestId': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
+  '/prs/requests/new': typeof dashboardDashboardLayoutPrsRequestsNewIndexRoute
   '/report-titles/$reportTitleId/define-field': typeof dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute
 }
 export interface FileRoutesById {
@@ -172,7 +244,15 @@ export interface FileRoutesById {
   '/(dashboard)/_dashboardLayout/report-titles/': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/(dashboard)/_dashboardLayout/reports/': typeof dashboardDashboardLayoutReportsIndexRoute
   '/(dashboard)/_dashboardLayout/reports/view/$groupId': typeof dashboardDashboardLayoutReportsViewGroupIdRoute
+  '/(dashboard)/_dashboardLayout/prs/finance/': typeof dashboardDashboardLayoutPrsFinanceIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/inbox/': typeof dashboardDashboardLayoutPrsInboxIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/my-requests/': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/(dashboard)/_dashboardLayout/reports/submit/': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/admin/form-templates/': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/admin/teams/': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/admin/workflows/': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/requests/$requestId/': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/requests/new/': typeof dashboardDashboardLayoutPrsRequestsNewIndexRoute
   '/(dashboard)/_dashboardLayout/report-titles/$reportTitleId/define-field/': typeof dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute
 }
 export interface FileRouteTypes {
@@ -191,7 +271,15 @@ export interface FileRouteTypes {
     | '/report-titles'
     | '/reports'
     | '/reports/view/$groupId'
+    | '/prs/finance'
+    | '/prs/inbox'
+    | '/prs/my-requests'
     | '/reports/submit'
+    | '/prs/admin/form-templates'
+    | '/prs/admin/teams'
+    | '/prs/admin/workflows'
+    | '/prs/requests/$requestId'
+    | '/prs/requests/new'
     | '/report-titles/$reportTitleId/define-field'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -208,7 +296,15 @@ export interface FileRouteTypes {
     | '/report-titles'
     | '/reports'
     | '/reports/view/$groupId'
+    | '/prs/finance'
+    | '/prs/inbox'
+    | '/prs/my-requests'
     | '/reports/submit'
+    | '/prs/admin/form-templates'
+    | '/prs/admin/teams'
+    | '/prs/admin/workflows'
+    | '/prs/requests/$requestId'
+    | '/prs/requests/new'
     | '/report-titles/$reportTitleId/define-field'
   id:
     | '__root__'
@@ -226,7 +322,15 @@ export interface FileRouteTypes {
     | '/(dashboard)/_dashboardLayout/report-titles/'
     | '/(dashboard)/_dashboardLayout/reports/'
     | '/(dashboard)/_dashboardLayout/reports/view/$groupId'
+    | '/(dashboard)/_dashboardLayout/prs/finance/'
+    | '/(dashboard)/_dashboardLayout/prs/inbox/'
+    | '/(dashboard)/_dashboardLayout/prs/my-requests/'
     | '/(dashboard)/_dashboardLayout/reports/submit/'
+    | '/(dashboard)/_dashboardLayout/prs/admin/form-templates/'
+    | '/(dashboard)/_dashboardLayout/prs/admin/teams/'
+    | '/(dashboard)/_dashboardLayout/prs/admin/workflows/'
+    | '/(dashboard)/_dashboardLayout/prs/requests/$requestId/'
+    | '/(dashboard)/_dashboardLayout/prs/requests/new/'
     | '/(dashboard)/_dashboardLayout/report-titles/$reportTitleId/define-field/'
   fileRoutesById: FileRoutesById
 }
@@ -336,6 +440,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof dashboardDashboardLayoutReportsSubmitIndexRouteImport
       parentRoute: typeof dashboardDashboardLayoutRoute
     }
+    '/(dashboard)/_dashboardLayout/prs/my-requests/': {
+      id: '/(dashboard)/_dashboardLayout/prs/my-requests/'
+      path: '/prs/my-requests'
+      fullPath: '/prs/my-requests'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsMyRequestsIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/inbox/': {
+      id: '/(dashboard)/_dashboardLayout/prs/inbox/'
+      path: '/prs/inbox'
+      fullPath: '/prs/inbox'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsInboxIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/finance/': {
+      id: '/(dashboard)/_dashboardLayout/prs/finance/'
+      path: '/prs/finance'
+      fullPath: '/prs/finance'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsFinanceIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
     '/(dashboard)/_dashboardLayout/reports/view/$groupId': {
       id: '/(dashboard)/_dashboardLayout/reports/view/$groupId'
       path: '/reports/view/$groupId'
@@ -348,6 +473,41 @@ declare module '@tanstack/react-router' {
       path: '/report-titles/$reportTitleId/define-field'
       fullPath: '/report-titles/$reportTitleId/define-field'
       preLoaderRoute: typeof dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/requests/new/': {
+      id: '/(dashboard)/_dashboardLayout/prs/requests/new/'
+      path: '/prs/requests/new'
+      fullPath: '/prs/requests/new'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsRequestsNewIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/requests/$requestId/': {
+      id: '/(dashboard)/_dashboardLayout/prs/requests/$requestId/'
+      path: '/prs/requests/$requestId'
+      fullPath: '/prs/requests/$requestId'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/admin/workflows/': {
+      id: '/(dashboard)/_dashboardLayout/prs/admin/workflows/'
+      path: '/prs/admin/workflows'
+      fullPath: '/prs/admin/workflows'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/admin/teams/': {
+      id: '/(dashboard)/_dashboardLayout/prs/admin/teams/'
+      path: '/prs/admin/teams'
+      fullPath: '/prs/admin/teams'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsAdminTeamsIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/prs/admin/form-templates/': {
+      id: '/(dashboard)/_dashboardLayout/prs/admin/form-templates/'
+      path: '/prs/admin/form-templates'
+      fullPath: '/prs/admin/form-templates'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRouteImport
       parentRoute: typeof dashboardDashboardLayoutRoute
     }
   }
@@ -365,7 +525,15 @@ interface dashboardDashboardLayoutRouteChildren {
   dashboardDashboardLayoutReportTitlesIndexRoute: typeof dashboardDashboardLayoutReportTitlesIndexRoute
   dashboardDashboardLayoutReportsIndexRoute: typeof dashboardDashboardLayoutReportsIndexRoute
   dashboardDashboardLayoutReportsViewGroupIdRoute: typeof dashboardDashboardLayoutReportsViewGroupIdRoute
+  dashboardDashboardLayoutPrsFinanceIndexRoute: typeof dashboardDashboardLayoutPrsFinanceIndexRoute
+  dashboardDashboardLayoutPrsInboxIndexRoute: typeof dashboardDashboardLayoutPrsInboxIndexRoute
+  dashboardDashboardLayoutPrsMyRequestsIndexRoute: typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   dashboardDashboardLayoutReportsSubmitIndexRoute: typeof dashboardDashboardLayoutReportsSubmitIndexRoute
+  dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute: typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  dashboardDashboardLayoutPrsAdminTeamsIndexRoute: typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
+  dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute: typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
+  dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute: typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
+  dashboardDashboardLayoutPrsRequestsNewIndexRoute: typeof dashboardDashboardLayoutPrsRequestsNewIndexRoute
   dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute: typeof dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute
 }
 
@@ -393,8 +561,24 @@ const dashboardDashboardLayoutRouteChildren: dashboardDashboardLayoutRouteChildr
       dashboardDashboardLayoutReportsIndexRoute,
     dashboardDashboardLayoutReportsViewGroupIdRoute:
       dashboardDashboardLayoutReportsViewGroupIdRoute,
+    dashboardDashboardLayoutPrsFinanceIndexRoute:
+      dashboardDashboardLayoutPrsFinanceIndexRoute,
+    dashboardDashboardLayoutPrsInboxIndexRoute:
+      dashboardDashboardLayoutPrsInboxIndexRoute,
+    dashboardDashboardLayoutPrsMyRequestsIndexRoute:
+      dashboardDashboardLayoutPrsMyRequestsIndexRoute,
     dashboardDashboardLayoutReportsSubmitIndexRoute:
       dashboardDashboardLayoutReportsSubmitIndexRoute,
+    dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute:
+      dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute,
+    dashboardDashboardLayoutPrsAdminTeamsIndexRoute:
+      dashboardDashboardLayoutPrsAdminTeamsIndexRoute,
+    dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute:
+      dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute,
+    dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute:
+      dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute,
+    dashboardDashboardLayoutPrsRequestsNewIndexRoute:
+      dashboardDashboardLayoutPrsRequestsNewIndexRoute,
     dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute:
       dashboardDashboardLayoutReportTitlesReportTitleIdDefineFieldIndexRoute,
   }

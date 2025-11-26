@@ -49,46 +49,75 @@ def health_view(request):
 @permission_classes([IsAuthenticated])
 def me_view(request):
     user = request.user
-    # Optional: derive roles from AccessScope if available
+    # Derive roles and access metadata from AccessScope
     roles: List[str] = []
     accessible_companies = []
-    company_roles = {}  # Map of company_id -> list of role titles
+    company_roles = {}  # Map of company_id -> list of role dicts
+
     try:
         from accounts.models import AccessScope  # type: ignore
         from org.models import OrgNode  # type: ignore
         from org.serializers import OrgNodeSerializer  # type: ignore
+
+        # All active access scopes for role detection (team-based OR company-based)
+        all_active_scopes = (
+            AccessScope.objects.filter(user=user, is_active=True)
+            .select_related("org_node", "role")
+        )
+
+        # Backend exposes stable, uppercase role *codes* for frontend RBAC
+        roles = list(
+            set(
+                [
+                    scope.role.code
+                    for scope in all_active_scopes
+                    if getattr(scope, "role", None) and getattr(scope.role, "code", None)
+                ]
+            )
+        )
         
-        # Get accessible companies (only COMPANY node_type) with their roles
-        access_scopes = AccessScope.objects.filter(
-            user=user,
-            is_active=True,
+        # Check if user is assigned as an approver in any workflow step
+        # This allows users to have APPROVER role without explicit AccessScope
+        try:
+            from workflows.models import WorkflowStepApprover  # type: ignore
+            has_approver_assignment = WorkflowStepApprover.objects.filter(
+                approver=user,
+                is_active=True,
+                step__is_active=True
+            ).exists()
+            
+            if has_approver_assignment and 'APPROVER' not in roles:
+                roles.append('APPROVER')
+        except Exception:
+            # If workflows app is not available, skip this check
+            pass
+
+        # Company-level access is optional; we keep previous behaviour but it is
+        # not required for PRS RBAC in the frontend.
+        company_scopes = all_active_scopes.filter(
             org_node__is_active=True,
-            org_node__node_type=OrgNode.COMPANY
+            org_node__node_type=OrgNode.COMPANY,
         ).select_related("org_node", "role")
-        
-        # Extract unique companies and build company_roles mapping
+
         company_ids = set()
-        for scope in access_scopes:
+        for scope in company_scopes:
             if scope.org_node and scope.org_node.id not in company_ids:
                 company_ids.add(scope.org_node.id)
                 accessible_companies.append(scope.org_node)
-            
-            # Add role to company_roles mapping
+
             if scope.org_node and scope.role:
                 company_id = str(scope.org_node.id)
                 if company_id not in company_roles:
                     company_roles[company_id] = []
-                company_roles[company_id].append({
-                    'id': str(scope.role.id),
-                    'title': scope.role.title,
-                    'code': scope.role.code,
-                    'position_title': scope.position_title,
-                })
-        
-        # Get all unique roles across all companies
-        roles = list(set([role['title'] for roles_list in company_roles.values() for role in roles_list]))
-        
-        # Serialize companies
+                company_roles[company_id].append(
+                    {
+                        "id": str(scope.role.id),
+                        "title": scope.role.title,
+                        "code": scope.role.code,
+                        "position_title": scope.position_title,
+                    }
+                )
+
         accessible_companies = OrgNodeSerializer(accessible_companies, many=True).data
     except Exception:
         # If there's an error loading access scopes, return empty data
@@ -97,7 +126,7 @@ def me_view(request):
         roles = []
         accessible_companies = []
         company_roles = {}
-    
+
     is_admin = bool(getattr(user, "is_superuser", False) or getattr(user, "is_staff", False))
     return Response(
         {

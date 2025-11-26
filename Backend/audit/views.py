@@ -11,9 +11,12 @@ from audit.serializers import AuditEventSerializer, FieldChangeSerializer
 class AuditEventViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing audit events (read-only).
-    Provides audit trail for all submission activities.
+    Provides audit trail for all submission and purchase request activities.
     """
-    queryset = AuditEvent.objects.all().select_related('actor', 'submission').prefetch_related('field_changes__field')
+    queryset = AuditEvent.objects.all().select_related('actor', 'submission', 'request').prefetch_related(
+        'field_changes__field',
+        'field_changes__form_field'
+    )
     serializer_class = AuditEventSerializer
     permission_classes = [IsAdminUser]
 
@@ -72,6 +75,33 @@ class AuditEventViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'detail': f'Invalid event_type. Must be one of: SUBMIT, STATUS_CHANGE, FIELD_UPDATE'}, status=400)
         
         events = self.queryset.filter(event_type=event_type).order_by('-created_at')
+        serializer = self.get_serializer(events, many=True)
+        return Response(serializer.data)
+    
+    @extend_schema(
+        summary="Get audit trail for a purchase request",
+        description="Returns complete audit trail for a purchase request including all events and field changes.",
+        parameters=[
+            OpenApiParameter(
+                name='request_id',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description='UUID of the purchase request to get audit trail for',
+            ),
+        ],
+        responses={
+            200: AuditEventSerializer(many=True),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='by-request')
+    def by_request(self, request):
+        """Get all audit events for a specific purchase request"""
+        request_id = request.query_params.get('request_id')
+        if not request_id:
+            return Response({'detail': 'request_id query parameter is required'}, status=400)
+        
+        events = self.queryset.filter(request_id=request_id).order_by('created_at')
         serializer = self.get_serializer(events, many=True)
         return Response(serializer.data)
 

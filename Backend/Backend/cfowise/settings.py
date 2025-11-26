@@ -45,6 +45,13 @@ INSTALLED_APPS = [
     "periods.apps.PeriodsConfig",
     "reports.apps.ReportsConfig",
     "submissions.apps.SubmissionsConfig",
+    # PRS apps
+    "teams.apps.TeamsConfig",
+    "prs_forms.apps.PrsFormsConfig",
+    "workflows.apps.WorkflowsConfig",
+    "purchase_requests.apps.PurchaseRequestsConfig",
+    "attachments.apps.AttachmentsConfig",
+    "approvals.apps.ApprovalsConfig",
 ]
 
 MIDDLEWARE = [
@@ -180,6 +187,8 @@ REST_FRAMEWORK = {
         "anon": "100/hour",
         "user": "1000/hour",
     },
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 25,
 }
 
 # Disable browsable API in production
@@ -307,3 +316,20 @@ LOGGING = {
 import logging
 log_dir = Path(LOGGING["handlers"]["file"]["filename"]).parent
 log_dir.mkdir(parents=True, exist_ok=True)
+
+# Email Configuration
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") == "True"
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@example.com")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# PRS Completion Email
+PRS_COMPLETION_EMAIL = os.environ.get("PRS_COMPLETION_EMAIL", "")

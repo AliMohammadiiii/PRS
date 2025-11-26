@@ -1,0 +1,52 @@
+[Unit]
+Description=PRS Django Backend (Gunicorn)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=notify
+# TODO: create this user/group on the server or adjust as needed
+User=prs
+Group=prs
+WorkingDirectory=/opt/prs/Backend
+Environment="PATH=/opt/prs/venv/bin"
+# Main environment file for PRS deployment (see env.production.prs.example)
+EnvironmentFile=/opt/prs/.env
+# Explicit hosts for this instance; can also be overridden in EnvironmentFile
+Environment="DJANGO_ALLOWED_HOSTS=innovation.nntc.io,www.innovation.nntc.io,127.0.0.1,localhost"
+
+ExecStart=/opt/prs/venv/bin/gunicorn \
+    --workers 3 \
+    --timeout 120 \
+    --bind 127.0.0.1:9000 \
+    --access-logfile /var/log/prs/gunicorn-access.log \
+    --error-logfile /var/log/prs/gunicorn-error.log \
+    --log-level info \
+    cfowise.wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=false
+ProtectHome=true
+ReadWritePaths=/opt/prs /var/log/prs /tmp /var/run
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=prs-backend
+
+[Install]
+WantedBy=multi-user.target
+
+

@@ -7,11 +7,11 @@ from .views import me_view, health_view
 from .rate_limit_views import RateLimitedTokenObtainPairView, RateLimitedTokenRefreshView, RateLimitedTokenVerifyView
 from accounts.views import UserViewSet, AccessScopeViewSet, change_password_view
 from classifications.views import LookupTypeViewSet, LookupViewSet
-from periods.views import FinancialPeriodViewSet
-from org.views import OrgNodeViewSet, CompanyClassificationViewSet
-from reports import views as reports_views
-from submissions.views import UserWorkflowViewSet, AdminReviewViewSet, SubmissionViewSet, ReportSubmissionGroupViewSet
 from audit.views import AuditEventViewSet, FieldChangeViewSet
+from teams.views import TeamViewSet
+from purchase_requests.views import PurchaseRequestViewSet
+from prs_forms.views import FormTemplateViewSet
+from workflows.views import WorkflowViewSet
 
 router = DefaultRouter()
 # Admin/setup APIs
@@ -19,21 +19,19 @@ router.register(r"users", UserViewSet, basename="user")
 router.register(r"access-scopes", AccessScopeViewSet, basename="access-scope")
 router.register(r"lookup-types", LookupTypeViewSet, basename="lookup-type")
 router.register(r"lookups", LookupViewSet, basename="lookup")
-router.register(r"financial-periods", FinancialPeriodViewSet, basename="financial-period")
-router.register(r"org-nodes", OrgNodeViewSet, basename="org-node")
-router.register(r"company-classifications", CompanyClassificationViewSet, basename="company-classification")
-# Reports setup
-router.register(r"report-groups", reports_views.ReportGroupViewSet, basename="report-group")
-router.register(r"report-boxes", reports_views.ReportBoxViewSet, basename="report-box")
-router.register(r"report-fields", reports_views.ReportFieldViewSet, basename="report-field")
-# Workflow / review
-router.register(r"workflow", UserWorkflowViewSet, basename="workflow")
-router.register(r"submissions", SubmissionViewSet, basename="submission")
-router.register(r"report-submission-groups", ReportSubmissionGroupViewSet, basename="report-submission-group")
-router.register(r"review", AdminReviewViewSet, basename="review")
+#
+# Legacy CFO-wise APIs (financial periods, org, reports, submissions) have been
+# removed from the public router to keep this project focused on PRS.
+# The underlying apps and models remain available for data preservation but are
+# no longer exposed as HTTP endpoints.
 # Audit APIs
 router.register(r"audit-events", AuditEventViewSet, basename="audit-event")
 router.register(r"field-changes", FieldChangeViewSet, basename="field-change")
+# PRS APIs
+router.register(r"prs/teams", TeamViewSet, basename="prs-team")
+router.register(r"prs/requests", PurchaseRequestViewSet, basename="prs-request")
+router.register(r"prs/form-templates", FormTemplateViewSet, basename="prs-form-template")
+router.register(r"prs/workflows", WorkflowViewSet, basename="prs-workflow")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -50,7 +48,7 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
-    # API router
+    # API router (PRS‑focused)
     path("api/", include(router.urls)),
 ]
 

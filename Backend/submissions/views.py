@@ -765,6 +765,7 @@ class SubmissionViewSet(viewsets.ReadOnlyModelViewSet):
             'group__reporting_period__type',  # Needed for LookupSerializer in group
             'group__status',
             'group__status__type',  # Needed for LookupSerializer in group
+            'group__submitted_by',  # Needed for ReportSubmissionGroupBasicSerializer
         ).prefetch_related(
             'values',
             'values__field',
@@ -812,8 +813,19 @@ class SubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         # Order by created_at descending
         queryset = queryset.order_by('-created_at')
         
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        try:
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error serializing submissions: {str(e)}", exc_info=True)
+            # Return a more informative error response
+            return Response(
+                {'detail': f'Error processing submissions: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class AdminReviewViewSet(viewsets.GenericViewSet):

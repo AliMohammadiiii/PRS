@@ -6,7 +6,15 @@ import {
 } from 'src/types/api/periods';
 
 export async function getFinancialPeriods(): Promise<FinancialPeriod[]> {
-  const response = await apiRequest.get<FinancialPeriod[]>('/api/financial-periods/');
+  // Legacy CFO-wise endpoint `/api/financial-periods/` is no longer exposed
+  // on the backend. To keep the PRS UI stable, we return an empty list when
+  // a 404 is encountered, treating financial periods as optional metadata.
+  const response = await apiRequest.get<FinancialPeriod[]>('/api/financial-periods/').catch((error: any) => {
+    if (error?.response?.status === 404) {
+      return { data: [] as FinancialPeriod[] };
+    }
+    throw error;
+  });
   return response.data;
 }
 

@@ -6,8 +6,14 @@ import {
 } from 'src/types/api/users';
 
 export async function getUsers(): Promise<User[]> {
-  const response = await apiRequest.get<User[]>('/api/users/');
-  return response.data;
+  const response = await apiRequest.get<any>('/api/users/');
+  // Handle both paginated response (with results) and non-paginated array response
+  if (Array.isArray(response.data)) {
+    return response.data;
+  } else if (response.data && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  return [];
 }
 
 export async function getUser(id: string): Promise<User> {
