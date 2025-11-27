@@ -5,8 +5,8 @@ import { routeTree } from "../routes/routeTree.gen";
 import Providers from "../providers";
 
 // Create a new router instance
-// Use /cfowise as base path in production
-const basepath = import.meta.env.PROD ? '/cfowise' : '/';
+// Use /PRS as base path in production
+const basepath = import.meta.env.PROD ? '/PRS' : '/';
 
 export const router = createRouter({
   routeTree,

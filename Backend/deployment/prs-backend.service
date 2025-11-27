@@ -9,7 +9,7 @@ Type=notify
 # If deploying manually, create with: sudo adduser --disabled-password --gecos "" prs
 User=prs
 Group=prs
-WorkingDirectory=/opt/prs/Backend
+WorkingDirectory=/opt/prs/Backend/Backend
 Environment="PATH=/opt/prs/venv/bin"
 # Main environment file for PRS deployment (see env.production.prs.example)
 EnvironmentFile=/opt/prs/.env
