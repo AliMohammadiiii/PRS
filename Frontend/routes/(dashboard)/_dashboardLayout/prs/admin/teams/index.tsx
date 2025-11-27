@@ -15,9 +15,10 @@ import {
   InputLabel,
   Switch,
   FormControlLabel,
+  IconButton,
 } from '@mui/material';
-import { SearchNormal1, Add, Edit } from 'iconsax-react';
-import { Power } from 'lucide-react';
+import { SearchNormal1, Add } from 'iconsax-react';
+import { Edit2, Trash2 } from 'lucide-react';
 import PageHeader from '../../../../components/PageHeader';
 import DataGridLoading from 'src/shared/components/DataGridLoading';
 import DataGridPagination from 'src/shared/components/DataGridPagination';
@@ -234,23 +235,32 @@ function TeamsAdminPage() {
       headerAlign: 'center',
       renderCell: (params: GridRenderCellParams<Team>) => (
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', width: '100%' }}>
-          <Button
+          <IconButton
             size="small"
-            variant="outlined"
-            startIcon={<Edit size={16} />}
             onClick={() => openEditDialog(params.row)}
+            color="warning"
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+            }}
+            aria-label="ویرایش"
           >
-            ویرایش
-          </Button>
-          <Button
+            <Edit2 size={16} />
+          </IconButton>
+          <IconButton
             size="small"
-            variant="outlined"
-            color={params.row.is_active ? 'warning' : 'success'}
-            startIcon={<Power size={16} />}
             onClick={() => openDeactivateDialog(params.row)}
+            color="error"
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+            }}
+            aria-label={params.row.is_active ? 'غیرفعال' : 'فعال'}
           >
-            {params.row.is_active ? 'غیرفعال' : 'فعال'}
-          </Button>
+            <Trash2 size={16} />
+          </IconButton>
         </Box>
       ),
     },

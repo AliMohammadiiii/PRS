@@ -17,8 +17,10 @@ import {
   Chip,
   Autocomplete,
   Checkbox,
+  IconButton,
 } from '@mui/material';
-import { Add, Edit, ArrowUp, ArrowDown, TickCircle } from 'iconsax-react';
+import { Add, ArrowUp, ArrowDown, TickCircle } from 'iconsax-react';
+import { Edit2 } from 'lucide-react';
 import PageHeader from '../../../../components/PageHeader';
 import { WorkflowTemplate, WorkflowTemplateStep } from 'src/types/api/prs';
 import { Lookup } from 'src/types/api/lookups';
@@ -394,13 +396,19 @@ function WorkflowsAdminPage() {
                             : 'هیچ‌کدام'}
                         </Typography>
                       </Box>
-                      <Button
+                      <IconButton
                         size="small"
-                        startIcon={<Edit size={16} />}
                         onClick={() => handleEditStep(step)}
+                        color="warning"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1,
+                        }}
+                        aria-label="ویرایش"
                       >
-                        ویرایش
-                      </Button>
+                        <Edit2 size={16} />
+                      </IconButton>
                     </Box>
                   </Box>
                 ))}

@@ -1,5 +1,31 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
 from accounts.models import User, AccessScope
+
+
+class CaseInsensitiveTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom token serializer that performs case-insensitive username lookup.
+    This allows users to login with any case variation of their username.
+    """
+    def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+        
+        if username:
+            # Perform case-insensitive username lookup
+            User = get_user_model()
+            try:
+                user = User.objects.get(username__iexact=username)
+                # Update attrs with the actual username from database
+                attrs['username'] = user.username
+            except User.DoesNotExist:
+                # If user not found, let the parent class handle the error
+                pass
+        
+        # Call parent validation with the corrected username
+        return super().validate(attrs)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -25,6 +51,31 @@ class UserSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'date_joined', 'last_login', 'created_at', 'updated_at']
+
+    def validate_username(self, value):
+        """
+        Validate that the username is unique case-insensitively.
+        This prevents users from creating accounts with usernames that differ only by case.
+        """
+        if value:
+            # Check for case-insensitive username conflicts
+            User = get_user_model()
+            existing_user = User.objects.filter(username__iexact=value).first()
+            
+            # If updating, exclude the current instance
+            if self.instance:
+                if existing_user and existing_user.id != self.instance.id:
+                    raise serializers.ValidationError(
+                        "A user with this username already exists."
+                    )
+            else:
+                # Creating new user
+                if existing_user:
+                    raise serializers.ValidationError(
+                        "A user with this username already exists."
+                    )
+        
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)

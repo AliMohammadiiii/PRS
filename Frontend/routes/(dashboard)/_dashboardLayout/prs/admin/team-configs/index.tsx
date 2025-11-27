@@ -15,9 +15,11 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  IconButton,
 } from '@mui/material';
 import { Grid, Toggle } from 'injast-core/components';
-import { SearchNormal1, Add, Edit } from 'iconsax-react';
+import { SearchNormal1, Add } from 'iconsax-react';
+import { Edit2 } from 'lucide-react';
 import PageHeader from '../../../../components/PageHeader';
 import DataGridLoading from 'src/shared/components/DataGridLoading';
 import DataGridPagination from 'src/shared/components/DataGridPagination';
@@ -402,14 +404,19 @@ function TeamConfigsAdminPage() {
       headerAlign: 'center',
       renderCell: (params: GridRenderCellParams<ConfigWithTeam>) => (
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', width: '100%' }}>
-          <Button
+          <IconButton
             size="small"
-            variant="outlined"
-            startIcon={<Edit size={16} />}
             onClick={() => openEditDialog(params.row)}
+            color="warning"
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+            }}
+            aria-label="ویرایش"
           >
-            ویرایش
-          </Button>
+            <Edit2 size={16} />
+          </IconButton>
         </Box>
       ),
     },

@@ -10,14 +10,16 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import Throttled
+from accounts.serializers import CaseInsensitiveTokenObtainPairSerializer
 
 
 class RateLimitedTokenObtainPairView(TokenObtainPairView):
     """
-    Rate-limited token obtain view.
+    Rate-limited token obtain view with case-insensitive username support.
     Limits to 5 attempts per 15 minutes per IP address in production.
     In DEBUG mode, rate limiting is disabled.
     """
+    serializer_class = CaseInsensitiveTokenObtainPairSerializer
     rate_limit_key = 'ip'
     rate_limit_rate = '5/15m'
     

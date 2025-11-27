@@ -1157,8 +1157,15 @@ function NewPurchaseRequestPage() {
                         setSubmitFiles((prev) => prev.filter((_, i) => i !== index));
                       }}
                       disabled={isSubmitting}
+                      color="error"
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 1,
+                      }}
+                      aria-label="حذف"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 size={16} />
                     </IconButton>
                   </Box>
                 ))}

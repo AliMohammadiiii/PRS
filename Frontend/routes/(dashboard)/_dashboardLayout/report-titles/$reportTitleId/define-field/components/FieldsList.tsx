@@ -80,15 +80,13 @@ export default function FieldsList({
             color="error"
             size="small"
             sx={{
-              width: 40,
-              height: 40,
+              width: 32,
+              height: 32,
               borderRadius: 1,
-              border: '1px solid',
-              borderColor: 'divider',
             }}
             aria-label="حذف همه"
           >
-            <Trash2 className="w-5 h-5" />
+            <Trash2 size={16} />
           </IconButton>
         </Box>
       </Box>
@@ -194,7 +192,7 @@ export default function FieldsList({
                   }}
                   aria-label="حذف"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 size={16} />
                 </IconButton>
               </Box>
             );

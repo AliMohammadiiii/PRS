@@ -486,10 +486,17 @@ export default function PrsAttachmentsPanel({
                 </Button>
                 {canEdit && (
                   <IconButton
+                    size="small"
                     onClick={() => handleDelete(attachment.id)}
-                    sx={{ color: 'error.main' }}
+                    color="error"
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 1,
+                    }}
+                    aria-label="حذف"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 size={16} />
                   </IconButton>
                 )}
               </Box>

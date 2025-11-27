@@ -535,7 +535,7 @@ function FormTemplatesAdminPage() {
                         }}
                         aria-label="ویرایش"
                       >
-                        <Edit2 size={20} className="w-5 h-5" />
+                        <Edit2 size={16} />
                       </IconButton>
                       <IconButton
                         size="small"
@@ -553,7 +553,7 @@ function FormTemplatesAdminPage() {
                         }}
                         aria-label="حذف"
                       >
-                        <Trash2 size={20} className="w-5 h-5" />
+                        <Trash2 size={16} />
                       </IconButton>
                     </Box>
                   </Box>
