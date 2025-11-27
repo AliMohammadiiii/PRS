@@ -1,6 +1,7 @@
-# CFOWise Security Checklist
+# PRS Security Checklist
 
-This document provides a security checklist for production deployment of CFOWise.
+This document provides a security checklist for production deployment of PRS (Purchase Request System).
+Note: This checklist applies to both PRS and CFOWise applications.
 
 ## Pre-Deployment Security Checklist
 
@@ -65,7 +66,7 @@ This document provides a security checklist for production deployment of CFOWise
   - fail2ban configured
 
 - [x] **Service isolation**
-  - Application runs as dedicated user (cfowise)
+  - Application runs as dedicated user (prs for PRS, cfowise for CFOWise)
   - Systemd service with proper permissions
   - No root privileges for application
 
@@ -90,16 +91,16 @@ This document provides a security checklist for production deployment of CFOWise
 
 ### Initial Setup
 
-1. [ ] Run `setup-ubuntu.sh` as root
-2. [ ] Create `.env` file from `deployment/env.production.example`
+1. [ ] Run `setup-ubuntu-prs.sh` as root (for PRS) or `setup-ubuntu.sh` (for CFOWise)
+2. [ ] Create `.env` file from `deployment/env.production.prs.example` (PRS) or `env.production.example` (CFOWise)
 3. [ ] Generate secure SECRET_KEY: `openssl rand -base64 32`
 4. [ ] Set strong database password
 5. [ ] Configure ALLOWED_HOSTS with actual domain names
 6. [ ] Set CORS_ALLOWED_ORIGINS with production frontend URLs
-7. [ ] Install systemd service: `cfowise-backend.service`
-8. [ ] Install Nginx configuration
+7. [ ] Install systemd service: `prs-backend.service` (PRS) or `cfowise-backend.service` (CFOWise)
+8. [ ] Install Nginx configuration (shared config includes both applications)
 9. [ ] Update Nginx config with domain name
-10. [ ] Obtain SSL certificate: `certbot --nginx -d your-domain.com`
+10. [ ] Obtain SSL certificate: `certbot --nginx -d innovation.nntc.io`
 11. [ ] Verify SSL certificate renewal is configured
 
 ### Security Verification

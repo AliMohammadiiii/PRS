@@ -14,7 +14,8 @@ import type { UserMeResponse } from 'src/types/api/auth';
 import * as authApi from 'src/services/api/auth';
 
 // Logo - use specific login SVG logo from public assets
-const logoUrl = import.meta.env.PROD ? '/cfowise/LoginLogo.svg' : '/LoginLogo.svg';
+// Use BASE_URL from Vite to handle subpath deployment
+const logoUrl = `${import.meta.env.BASE_URL}LoginLogo.svg`;
 
 const schema = z.object({
   username: z.string().min(1, 'نام کاربری الزامی است'),

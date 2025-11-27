@@ -6,7 +6,8 @@ import { useAuth } from 'src/client/contexts/AuthContext';
 import { hasRole, isRequesterOnlyUser } from 'src/shared/utils/prsUtils';
 
 // Logo - served from Vite/React `public` folder root
-const sideBarLogo = '/Navigationlogo.svg';
+// Use BASE_URL from Vite to handle subpath deployment
+const sideBarLogo = `${import.meta.env.BASE_URL}Navigationlogo.svg`;
 
 type MenuItemProps = {
   isActive: boolean;

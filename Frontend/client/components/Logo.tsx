@@ -7,9 +7,11 @@ type LogoProps = {
 
 // Navigation logo used in sidebar
 const Logo: React.FC<LogoProps> = ({ height = 32 }) => {
+  // Use BASE_URL from Vite to handle subpath deployment
+  const baseUrl = import.meta.env.BASE_URL;
   return (
     <img
-      src="/Navigationlogo.svg"
+      src={`${baseUrl}Navigationlogo.svg`}
       alt="PRS navigation logo"
       style={{
         height,
