@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ThemeProvider } from 'next-themes';
 import { MessageProvider } from 'injast-core/context';
 import { SPAThemeProvider } from 'injast-core/providers';
 import { appColors } from 'src/theme/colors';
@@ -16,24 +17,26 @@ export default function Providers({ children }: Readonly<{ children: ReactNode }
     ...faIR,
   };
   return (
-    <SPAThemeProvider dir="rtl" appColors={appColors} themeOptions={options}>
-      <ThemeAlphaWrapper>
-        <MessageProvider
-          width="350px"
-          toastPosition={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <AuthProvider>
-            <CompanyProvider>
-              <FinancialPeriodProvider>
-                <TeamProvider>
-                  {children}
-                </TeamProvider>
-              </FinancialPeriodProvider>
-            </CompanyProvider>
-          </AuthProvider>
-        </MessageProvider>
-      </ThemeAlphaWrapper>
-    </SPAThemeProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false}>
+      <SPAThemeProvider dir="rtl" appColors={appColors} themeOptions={options}>
+        <ThemeAlphaWrapper>
+          <MessageProvider
+            width="350px"
+            toastPosition={{ vertical: 'top', horizontal: 'center' }}
+          >
+            <AuthProvider>
+              <CompanyProvider>
+                <FinancialPeriodProvider>
+                  <TeamProvider>
+                    {children}
+                  </TeamProvider>
+                </FinancialPeriodProvider>
+              </CompanyProvider>
+            </AuthProvider>
+          </MessageProvider>
+        </ThemeAlphaWrapper>
+      </SPAThemeProvider>
+    </ThemeProvider>
   );
 }
 

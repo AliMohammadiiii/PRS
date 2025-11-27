@@ -10,6 +10,21 @@
   <body>
     <div id="root"></div>
 
+    <!-- Force light mode - prevent dark class from being added -->
+    <script>
+      // Remove dark class if it exists and prevent it from being added
+      document.documentElement.classList.remove('dark');
+      const observer = new MutationObserver(() => {
+        if (document.documentElement.classList.contains('dark')) {
+          document.documentElement.classList.remove('dark');
+        }
+      });
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+    </script>
+
     <script type="module" src="/client/main.tsx"></script>
   </body>
 </html>
