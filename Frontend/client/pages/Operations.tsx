@@ -91,7 +91,7 @@ export default function Operations() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
 
           <TabsContent value="organization" className="mt-0">
-            <div className="grid grid-cols-1 lg:grid-cols-[432px_1fr] gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-[432px_1fr] gap-4 min-h-[400px]">
               {/* Left Column - Organization Info Form */}
               <div className="bg-white rounded-xl p-6 flex flex-col gap-5">
                 <h3 className="text-base font-bold text-app-text-primary text-right">
@@ -121,7 +121,7 @@ export default function Operations() {
                   <FormControl fullWidth>
                     <InputLabel>نوع سازمان</InputLabel>
                     <TextField
-                    label="نوع سازم��ن"
+                      label="نوع سازمان"
                       value={orgType}
                       onChange={(e) => setOrgType(e.target.value)}
                       InputProps={{
@@ -135,7 +135,8 @@ export default function Operations() {
                             </IconButton>
                           ) : undefined,
                       }}
-                  />
+                    />
+                  </FormControl>
 
                   <FormControl fullWidth>
                     <InputLabel>شماره ثبت</InputLabel>
@@ -240,7 +241,7 @@ export default function Operations() {
           </TabsContent>
 
           <TabsContent value="users">
-            <div className="bg-white rounded-xl p-6">
+            <div className="bg-white rounded-xl p-6 min-h-[400px]">
               <p className="text-center text-app-text-secondary">
                 صفحه تعریف کاربران
               </p>

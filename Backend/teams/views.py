@@ -8,16 +8,29 @@ from drf_spectacular.types import OpenApiTypes
 from django.db.models import Prefetch, Q
 from django.db import transaction
 from teams.models import Team
-from teams.serializers import TeamSerializer, TeamCreateSerializer, TeamUpdateSerializer
+from teams.serializers import TeamSerializer, TeamCreateSerializer, TeamUpdateSerializer, TeamMinimalSerializer
 from prs_forms.models import FormTemplate, FormField
-from prs_forms.serializers import FormTemplateDetailSerializer, TeamMinimalSerializer
+from prs_forms.serializers import FormTemplateDetailSerializer, FormTemplateSerializer
 from attachments.models import AttachmentCategory
 from attachments.serializers import AttachmentCategorySerializer
 from accounts.permissions import IsSystemAdmin, ReadOnlyOrAdmin
 from accounts.models import AccessScope
 from purchase_requests.models import PurchaseRequest
-from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
-from workflows.serializers import WorkflowDetailSerializer
+from workflows.models import (
+    Workflow, WorkflowStep, WorkflowStepApprover,
+    WorkflowTemplate, WorkflowTemplateStep, WorkflowTemplateStepApprover
+)
+from workflows.serializers import (
+    WorkflowDetailSerializer,
+    WorkflowTemplateListSerializer,
+    WorkflowTemplateDetailSerializer
+)
+from prs_team_config.models import TeamPurchaseConfig
+from prs_team_config.serializers import (
+    TeamPurchaseConfigListSerializer,
+    EffectiveTemplateSerializer
+)
+from classifications.models import Lookup
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -149,33 +162,55 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Get active form template for a team",
-        description="Returns the active form template for the specified team, including all form fields ordered by their order field.",
+        description="Returns the active form template for the specified team, including all form fields ordered by their order field. "
+                    "Note: Templates are now purchase-type specific. This endpoint returns the first available template for the team. "
+                    "For purchase-type specific templates, use the effective-template endpoint instead.",
         responses={
-            200: FormTemplateDetailSerializer,
+            200: {'description': 'Form template response with team and template'},
             404: {'description': 'No active form template found for this team'},
         },
     )
     @action(detail=True, methods=['get'], url_path='form-template')
     def form_template(self, request, pk=None):
         """
-        Retrieve the active form template for this team.
-        Returns 404 if no active template exists.
+        Retrieve the active form template for this team (legacy endpoint for backwards compatibility).
+        
+        Since FormTemplate is now team-agnostic and linked via TeamPurchaseConfig,
+        this endpoint finds the first active configuration for the team and returns its form template.
+        
+        For purchase-type specific templates, use the effective-template endpoint instead.
+        Returns 404 if no active configuration exists.
         """
         team = self.get_object()
         
-        # Find active FormTemplate for this team with optimized queries
-        # Explicitly order fields by 'order' field
+        # Find active TeamPurchaseConfig for this team (any purchase type)
+        # Since templates are now team-agnostic, we need to go through TeamPurchaseConfig
         try:
-            template = FormTemplate.objects.filter(
+            config = TeamPurchaseConfig.objects.filter(
                 team=team,
                 is_active=True
-            ).select_related('team').prefetch_related(
-                Prefetch('fields', queryset=FormField.objects.order_by('order'))
-            ).get()
-        except FormTemplate.DoesNotExist:
+            ).select_related(
+                'form_template'
+            ).prefetch_related(
+                Prefetch(
+                    'form_template__fields',
+                    queryset=FormField.objects.filter(is_active=True).order_by('order')
+                )
+            ).first()
+            
+            if not config or not config.form_template:
+                raise NotFound(
+                    detail=f'No active form template configuration found for team "{team.name}". '
+                           'Please contact an administrator to configure this team. '
+                           'Note: Templates are now purchase-type specific. Use the effective-template endpoint for purchase-type specific templates.'
+                )
+            
+            template = config.form_template
+        except TeamPurchaseConfig.DoesNotExist:
             raise NotFound(
-                detail=f'No active form template found for team "{team.name}". '
-                       'Please contact an administrator to create an active form template.'
+                detail=f'No active form template configuration found for team "{team.name}". '
+                       'Please contact an administrator to configure this team. '
+                       'Note: Templates are now purchase-type specific. Use the effective-template endpoint for purchase-type specific templates.'
             )
         
         # Serialize template and team separately to match the required response format
@@ -251,5 +286,192 @@ class TeamViewSet(viewsets.ModelViewSet):
         ).order_by('name')
         
         serializer = AttachmentCategorySerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # =========================================================================
+    # NEW MULTI-TEMPLATE ENDPOINTS
+    # =========================================================================
+
+    @extend_schema(
+        summary="List all form templates for a team",
+        description="Returns all active form templates configured for the specified team via TeamPurchaseConfig.",
+        responses={
+            200: FormTemplateSerializer(many=True),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='form-templates')
+    def form_templates(self, request, pk=None):
+        """
+        List all active form templates configured for this team.
+        
+        Since FormTemplate is now team-agnostic, this endpoint returns templates
+        that are linked to this team via TeamPurchaseConfig.
+        """
+        team = self.get_object()
+        
+        # Get all active configs for this team and extract unique form templates
+        configs = TeamPurchaseConfig.objects.filter(
+            team=team,
+            is_active=True,
+            form_template__is_active=True
+        ).select_related('form_template', 'form_template__created_by')
+        
+        # Extract unique templates (using set to avoid duplicates)
+        template_ids = set(config.form_template_id for config in configs if config.form_template)
+        
+        templates = FormTemplate.objects.filter(
+            id__in=template_ids,
+            is_active=True
+        ).select_related('created_by').order_by('-version_number')
+        
+        serializer = FormTemplateSerializer(templates, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="List all workflow templates for a team",
+        description="Returns all active workflow templates configured for the specified team via TeamPurchaseConfig.",
+        responses={
+            200: WorkflowTemplateListSerializer(many=True),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='workflow-templates')
+    def workflow_templates(self, request, pk=None):
+        """
+        List all active workflow templates configured for this team.
+        
+        Since WorkflowTemplate is now team-agnostic, this endpoint returns templates
+        that are linked to this team via TeamPurchaseConfig.
+        """
+        team = self.get_object()
+        
+        # Get all active configs for this team and extract unique workflow templates
+        configs = TeamPurchaseConfig.objects.filter(
+            team=team,
+            is_active=True,
+            workflow_template__is_active=True
+        ).select_related('workflow_template')
+        
+        # Extract unique templates (using set to avoid duplicates)
+        template_ids = set(config.workflow_template_id for config in configs if config.workflow_template)
+        
+        templates = WorkflowTemplate.objects.filter(
+            id__in=template_ids,
+            is_active=True
+        ).prefetch_related('steps').order_by('-version_number')
+        
+        serializer = WorkflowTemplateListSerializer(templates, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="List all purchase configurations for a team",
+        description="Returns all active team purchase configurations (mappings between purchase type and templates).",
+        responses={
+            200: TeamPurchaseConfigListSerializer(many=True),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='configs')
+    def configs(self, request, pk=None):
+        """
+        List all active purchase configurations for this team.
+        """
+        team = self.get_object()
+        
+        configs = TeamPurchaseConfig.objects.filter(
+            team=team,
+            is_active=True
+        ).select_related(
+            'purchase_type',
+            'purchase_type__type',
+            'form_template',
+            'workflow_template'
+        ).order_by('purchase_type__title')
+        
+        serializer = TeamPurchaseConfigListSerializer(configs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Get effective template pair for a team and purchase type",
+        description="Returns the active form template and workflow template for the specified team and purchase type combination.",
+        parameters=[
+            OpenApiParameter(
+                name='purchase_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Purchase type code (e.g., "SERVICE", "GOODS")',
+                required=True,
+            ),
+        ],
+        responses={
+            200: EffectiveTemplateSerializer,
+            400: {'description': 'Missing or invalid purchase_type parameter'},
+            404: {'description': 'No active configuration found for this team and purchase type'},
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='effective-template')
+    def effective_template(self, request, pk=None):
+        """
+        Get the effective form template and workflow template for a team + purchase type.
+        
+        This endpoint is used when creating a new purchase request to determine
+        which templates to use based on the selected team and purchase type.
+        """
+        team = self.get_object()
+        
+        # Get purchase_type from query params
+        purchase_type_code = request.query_params.get('purchase_type')
+        if not purchase_type_code:
+            raise ValidationError({
+                'purchase_type': 'This query parameter is required.'
+            })
+        
+        # Get purchase type lookup
+        try:
+            purchase_type = Lookup.objects.get(
+                type__code='PURCHASE_TYPE',
+                code=purchase_type_code,
+                is_active=True
+            )
+        except Lookup.DoesNotExist:
+            raise ValidationError({
+                'purchase_type': f'Purchase type "{purchase_type_code}" not found.'
+            })
+        
+        # Get active TeamPurchaseConfig for this team + purchase_type
+        try:
+            config = TeamPurchaseConfig.objects.select_related(
+                'form_template',
+                'workflow_template',
+                'purchase_type',
+                'purchase_type__type'
+            ).prefetch_related(
+                Prefetch(
+                    'form_template__fields',
+                    queryset=FormField.objects.filter(is_active=True).order_by('order')
+                ),
+                Prefetch(
+                    'workflow_template__steps',
+                    queryset=WorkflowTemplateStep.objects.filter(is_active=True).order_by('step_order')
+                )
+            ).get(
+                team=team,
+                purchase_type=purchase_type,
+                is_active=True
+            )
+        except TeamPurchaseConfig.DoesNotExist:
+            raise NotFound(
+                detail=f'No active procurement configuration found for team "{team.name}" '
+                       f'and purchase type "{purchase_type_code}". '
+                       'Please contact an administrator to configure this team.'
+            )
+        
+        # Build response data
+        response_data = {
+            'team': team,
+            'purchase_type': config.purchase_type,
+            'form_template': config.form_template,
+            'workflow_template': config.workflow_template,
+        }
+        
+        serializer = EffectiveTemplateSerializer(response_data)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

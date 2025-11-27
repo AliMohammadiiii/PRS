@@ -8,7 +8,7 @@ from teams.serializers import TeamSerializer
 from prs_forms.serializers import FormFieldSerializer
 from classifications.models import Lookup
 from classifications.serializers import LookupSerializer
-from workflows.models import WorkflowStep
+from workflows.models import WorkflowStep, WorkflowTemplateStep
 from purchase_requests import services
 
 
@@ -109,32 +109,63 @@ class PurchaseRequestCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        """Create a draft purchase request"""
+        """
+        Create a draft purchase request.
+        
+        Uses TeamPurchaseConfig to resolve the form_template and workflow_template
+        based on the team + purchase_type combination.
+        """
         team_id = validated_data.pop('team_id')
         purchase_type_code = validated_data.pop('purchase_type')
         
-        # Get team and validate it has an active form template
+        # Get team
         team = Team.objects.get(id=team_id)
         
-        # Get active form template for the team
-        from prs_forms.models import FormTemplate
-        try:
-            form_template = FormTemplate.objects.get(team=team, is_active=True)
-        except FormTemplate.DoesNotExist:
-            raise serializers.ValidationError(
-                f'No active form template found for team "{team.name}". '
-                'Please contact an administrator to create an active form template.'
-            )
-        
-        # Get status and purchase type lookups
-        status = self._get_lookup('REQUEST_STATUS', 'DRAFT')
+        # Get purchase type lookup
         purchase_type = self._get_lookup('PURCHASE_TYPE', purchase_type_code)
+        
+        # Try to get active TeamPurchaseConfig for this team + purchase_type
+        from prs_team_config.models import TeamPurchaseConfig
+        try:
+            config = TeamPurchaseConfig.objects.get(
+                team=team,
+                purchase_type=purchase_type,
+                is_active=True
+            )
+            form_template = config.form_template
+            workflow_template = config.workflow_template
+        except TeamPurchaseConfig.DoesNotExist:
+            # Fallback: try to get any active form template for the team
+            # and no workflow template (legacy behavior)
+            from prs_forms.models import FormTemplate
+            try:
+                form_template = FormTemplate.objects.filter(
+                    team=team,
+                    is_active=True
+                ).first()
+                if not form_template:
+                    raise serializers.ValidationError(
+                        f'No active procurement configuration found for team "{team.name}" and '
+                        f'purchase type "{purchase_type_code}". '
+                        'Please contact an administrator to configure this team.'
+                    )
+                workflow_template = None  # Legacy mode: workflow resolved at submit time
+            except FormTemplate.DoesNotExist:
+                raise serializers.ValidationError(
+                    f'No active procurement configuration found for team "{team.name}" and '
+                    f'purchase type "{purchase_type_code}". '
+                    'Please contact an administrator to configure this team.'
+                )
+        
+        # Get status lookup
+        status = self._get_lookup('REQUEST_STATUS', 'DRAFT')
         
         # Create purchase request
         purchase_request = PurchaseRequest.objects.create(
             requestor=self.context['request'].user,
             team=team,
             form_template=form_template,
+            workflow_template=workflow_template,
             status=status,
             purchase_type=purchase_type,
             **validated_data
@@ -370,10 +401,18 @@ class PurchaseRequestReadSerializer(serializers.ModelSerializer):
     """Serializer for reading purchase requests"""
     team = TeamSerializer(read_only=True)
     form_template_id = serializers.UUIDField(source='form_template.id', read_only=True)
+    workflow_template_id = serializers.UUIDField(source='workflow_template.id', read_only=True, allow_null=True)
     status = LookupSerializer(read_only=True)
     purchase_type = LookupSerializer(read_only=True)
+    # Legacy step fields (for backward compatibility)
     current_step_id = serializers.UUIDField(source='current_step.id', read_only=True, allow_null=True)
     current_step_name = serializers.CharField(source='current_step.step_name', read_only=True, allow_null=True)
+    # Template step fields (for new requests)
+    current_template_step_id = serializers.UUIDField(source='current_template_step.id', read_only=True, allow_null=True)
+    current_template_step_name = serializers.CharField(source='current_template_step.step_name', read_only=True, allow_null=True)
+    # Unified current step fields (returns whichever is set)
+    effective_step_id = serializers.SerializerMethodField()
+    effective_step_name = serializers.SerializerMethodField()
     field_values = PurchaseRequestFieldValueReadSerializer(many=True, read_only=True)
     attachments_count = serializers.SerializerMethodField()
     requestor_name = serializers.SerializerMethodField()
@@ -386,9 +425,14 @@ class PurchaseRequestReadSerializer(serializers.ModelSerializer):
             'requestor_name',
             'team',
             'form_template_id',
+            'workflow_template_id',
             'status',
             'current_step_id',
             'current_step_name',
+            'current_template_step_id',
+            'current_template_step_name',
+            'effective_step_id',
+            'effective_step_name',
             'vendor_name',
             'vendor_account',
             'subject',
@@ -415,5 +459,21 @@ class PurchaseRequestReadSerializer(serializers.ModelSerializer):
                 full_name = f"{obj.requestor.first_name or ''} {obj.requestor.last_name or ''}".strip()
                 return full_name if full_name else obj.requestor.username
             return obj.requestor.username
+        return None
+
+    def get_effective_step_id(self, obj):
+        """Get the effective current step ID (template or legacy)"""
+        if obj.current_template_step:
+            return str(obj.current_template_step.id)
+        if obj.current_step:
+            return str(obj.current_step.id)
+        return None
+
+    def get_effective_step_name(self, obj):
+        """Get the effective current step name (template or legacy)"""
+        if obj.current_template_step:
+            return obj.current_template_step.step_name
+        if obj.current_step:
+            return obj.current_step.step_name
         return None
 

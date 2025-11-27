@@ -133,6 +133,8 @@ export function UsersTable({
         headerName: 'تیم / سمت‌ها',
         flex: 2,
         minWidth: 600,
+        align: 'left',
+        headerAlign: 'left',
         renderCell: (params: GridRenderCellParams<User, string>) => {
           const user = params.row;
           const assignments = user.assignments || [];
@@ -258,6 +260,7 @@ export function UsersTable({
           rows={rows}
           columns={tableColumns}
           loading={false}
+          getRowHeight={() => 'auto'}
           slots={{
             loadingOverlay: DataGridLoading,
             noRowsOverlay: EmptyState,
@@ -278,11 +281,14 @@ export function UsersTable({
               fontSize: '14px',
               borderBottom: '1px solid #e5e7ea',
               overflow: 'visible',
+              whiteSpace: 'normal',
+              wordWrap: 'break-word',
             },
             '& .MuiDataGrid-cell[data-field="role"]': {
               alignItems: 'flex-start',
               paddingTop: '12px',
               paddingBottom: '12px',
+              textAlign: 'left',
             },
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f4f6fa',
@@ -293,6 +299,7 @@ export function UsersTable({
               fontSize: '14px',
             },
             '& .MuiDataGrid-row': {
+              minHeight: '56px !important',
               '&:nth-of-type(even)': {
                 backgroundColor: '#fafbfc',
               },

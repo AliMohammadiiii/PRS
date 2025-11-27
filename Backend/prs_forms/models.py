@@ -5,48 +5,38 @@ from core.models import BaseModel
 
 class FormTemplate(BaseModel):
     """
-    Team-specific form template with versioning for Purchase Request System.
+    General form template with versioning for Purchase Request System.
     
-    Each team has exactly one active FormTemplate version at a time (enforced via clean/save).
+    Form templates are team-agnostic and can be assigned to multiple teams
+    via TeamPurchaseConfig. The effective template for a given (team, purchase_type)
+    is selected via TeamPurchaseConfig.
     Changes create new versions; existing requests keep old template references.
-    The is_active flag indicates which template version is currently active for a team.
     """
-    team = models.ForeignKey('teams.Team', on_delete=models.CASCADE, related_name='form_templates')
+    name = models.CharField(max_length=128, help_text='Name for the template')
     version_number = models.PositiveIntegerField(default=1)
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_form_templates')
 
     class Meta:
-        unique_together = ('team', 'version_number')
+        unique_together = ('name', 'version_number')
         indexes = [
-            models.Index(fields=['team', 'version_number']),
-            models.Index(fields=['team', 'is_active']),
+            models.Index(fields=['name', 'version_number']),
+            models.Index(fields=['name', 'is_active']),
         ]
-        ordering = ['team', '-version_number']
+        ordering = ['name', '-version_number']
 
     def clean(self):
-        # Team must be active
-        if self.team and not self.team.is_active:
-            raise ValidationError('Team must be active.')
-        
-        # Enforce at most one active template per team
-        if self.is_active:
-            existing_active = FormTemplate.objects.filter(
-                team=self.team,
-                is_active=True
-            ).exclude(pk=self.pk if self.pk else None)
-            
-            if existing_active.exists():
-                raise ValidationError(
-                    'Only one active form template is allowed per team.'
-                )
+        # No team validation needed - templates are team-agnostic
+        # NOTE: Multiple active templates per name are allowed.
+        # The effective template is determined by TeamPurchaseConfig.
+        pass
 
     def save(self, *args, **kwargs):
-        # Ensure clean() is called to validate one active template per team
+        # Ensure clean() is called for validation
         self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f'{self.team.name} - v{self.version_number}'
+        return f'{self.name} - v{self.version_number}'
 
 
 class FormField(BaseModel):

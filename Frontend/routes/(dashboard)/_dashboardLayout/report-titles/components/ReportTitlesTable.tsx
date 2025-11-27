@@ -215,6 +215,7 @@ export function ReportTitlesTable({
           rows={rows}
           columns={tableColumns}
           loading={false}
+          getRowHeight={() => 'auto'}
           slots={{
             loadingOverlay: DataGridLoading,
             noRowsOverlay: EmptyState,
@@ -234,6 +235,8 @@ export function ReportTitlesTable({
               alignItems: 'center',
               fontSize: '14px',
               borderBottom: '1px solid #e5e7ea',
+              whiteSpace: 'normal',
+              wordWrap: 'break-word',
             },
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f4f6fa',
@@ -244,6 +247,7 @@ export function ReportTitlesTable({
               fontSize: '14px',
             },
             '& .MuiDataGrid-row': {
+              minHeight: '56px !important',
               '&:nth-of-type(even)': {
                 backgroundColor: '#fafbfc',
               },

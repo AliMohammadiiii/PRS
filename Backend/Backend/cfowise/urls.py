@@ -11,7 +11,7 @@ from audit.views import AuditEventViewSet, FieldChangeViewSet
 from teams.views import TeamViewSet
 from purchase_requests.views import PurchaseRequestViewSet
 from prs_forms.views import FormTemplateViewSet
-from workflows.views import WorkflowViewSet
+from workflows.views import WorkflowViewSet, WorkflowTemplateViewSet
 
 router = DefaultRouter()
 # Admin/setup APIs
@@ -31,7 +31,7 @@ router.register(r"field-changes", FieldChangeViewSet, basename="field-change")
 router.register(r"prs/teams", TeamViewSet, basename="prs-team")
 router.register(r"prs/requests", PurchaseRequestViewSet, basename="prs-request")
 router.register(r"prs/form-templates", FormTemplateViewSet, basename="prs-form-template")
-router.register(r"prs/workflows", WorkflowViewSet, basename="prs-workflow")
+router.register(r"prs/workflows", WorkflowTemplateViewSet, basename="prs-workflow-template")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

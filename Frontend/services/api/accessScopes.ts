@@ -7,13 +7,37 @@ import {
 
 export async function getAccessScopes(): Promise<AccessScope[]> {
   const response = await apiRequest.get<any>('/api/access-scopes/');
+  
   // Support both paginated and non-paginated responses
   if (Array.isArray(response.data)) {
+    // Non-paginated response - return directly
     return response.data;
   }
+  
   if (response.data && Array.isArray(response.data.results)) {
-    return response.data.results;
+    // Paginated response - fetch all pages
+    const allResults: AccessScope[] = [...response.data.results];
+    let nextUrl = response.data.next;
+    
+    // Follow pagination links until there are no more pages
+    while (nextUrl) {
+      // Extract the path from the full URL (remove domain if present)
+      const urlPath = nextUrl.startsWith('http') 
+        ? new URL(nextUrl).pathname + new URL(nextUrl).search
+        : nextUrl;
+      
+      const pageResponse = await apiRequest.get<any>(urlPath);
+      if (pageResponse.data && Array.isArray(pageResponse.data.results)) {
+        allResults.push(...pageResponse.data.results);
+        nextUrl = pageResponse.data.next;
+      } else {
+        break;
+      }
+    }
+    
+    return allResults;
   }
+  
   return [];
 }
 

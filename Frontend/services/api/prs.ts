@@ -11,11 +11,16 @@ import {
   ApproveRequestRequest,
   RejectRequestRequest,
   CompleteRequestRequest,
+  SubmitRequestRequest,
   PrsMyRequestsFilters,
   PrsMyRequestsResponse,
   PrsInboxFilters,
   PrsFinanceInboxFilters,
   ApprovalHistory,
+  WorkflowTemplate,
+  TeamPurchaseConfig,
+  EffectiveTemplateResponse,
+  FormField,
 } from 'src/types/api/prs';
 
 // Teams
@@ -59,15 +64,43 @@ export async function getPurchaseRequest(id: string): Promise<PurchaseRequest> {
   return response.data;
 }
 
-export async function submitPurchaseRequest(id: string): Promise<PurchaseRequest> {
-  const response = await apiRequest.post<PurchaseRequest>(`/api/prs/requests/${id}/submit/`);
-  return response.data;
+export async function submitPurchaseRequest(
+  id: string,
+  data?: SubmitRequestRequest
+): Promise<PurchaseRequest> {
+  if (data && (data.comment || (data.files && data.files.length > 0))) {
+    // If comment or files are provided, use multipart/form-data
+    const formData = new FormData();
+    if (data.comment) {
+      formData.append('comment', data.comment);
+    }
+    if (data.files && data.files.length > 0) {
+      data.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
+    const response = await apiRequest.post<PurchaseRequest>(
+      `/api/prs/requests/${id}/submit/`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  } else {
+    // No comment or files, use regular POST
+    const response = await apiRequest.post<PurchaseRequest>(`/api/prs/requests/${id}/submit/`);
+    return response.data;
+  }
 }
 
 export async function getMyApprovals(params?: PrsInboxFilters): Promise<PurchaseRequest[]> {
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.set('status', params.status);
   if (params?.teamId) searchParams.set('team_id', params.teamId);
+  if (params?.purchaseType) searchParams.set('purchase_type', params.purchaseType);
   if (params?.createdFrom) searchParams.set('created_from', params.createdFrom);
   if (params?.createdTo) searchParams.set('created_to', params.createdTo);
   if (params?.vendor) searchParams.set('vendor', params.vendor);
@@ -89,6 +122,7 @@ export async function getMyApprovals(params?: PrsInboxFilters): Promise<Purchase
 export async function getFinanceInbox(params?: PrsFinanceInboxFilters): Promise<PurchaseRequest[]> {
   const searchParams = new URLSearchParams();
   if (params?.teamId) searchParams.set('team_id', params.teamId);
+  if (params?.purchaseType) searchParams.set('purchase_type', params.purchaseType);
   if (params?.createdFrom) searchParams.set('created_from', params.createdFrom);
   if (params?.createdTo) searchParams.set('created_to', params.createdTo);
   if (params?.vendor) searchParams.set('vendor', params.vendor);
@@ -111,6 +145,7 @@ export async function fetchMyRequests(params?: PrsMyRequestsFilters): Promise<Pr
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.set('status', params.status);
   if (params?.teamId) searchParams.set('team_id', params.teamId);
+  if (params?.purchaseType) searchParams.set('purchase_type', params.purchaseType);
   if (params?.createdFrom) searchParams.set('created_from', params.createdFrom);
   if (params?.createdTo) searchParams.set('created_to', params.createdTo);
   if (params?.vendor) searchParams.set('vendor', params.vendor);
@@ -127,6 +162,7 @@ export async function fetchAllRequests(params?: PrsMyRequestsFilters): Promise<P
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.set('status', params.status);
   if (params?.teamId) searchParams.set('team_id', params.teamId);
+  if (params?.purchaseType) searchParams.set('purchase_type', params.purchaseType);
   if (params?.createdFrom) searchParams.set('created_from', params.createdFrom);
   if (params?.createdTo) searchParams.set('created_to', params.createdTo);
   if (params?.vendor) searchParams.set('vendor', params.vendor);
@@ -175,20 +211,57 @@ export async function approveRequest(
   requestId: string,
   data?: ApproveRequestRequest
 ): Promise<PurchaseRequest> {
-  const response = await apiRequest.post<PurchaseRequest>(
-    `/api/prs/requests/${requestId}/approve/`,
-    data || {}
-  );
-  return response.data;
+  if (data && (data.comment || (data.files && data.files.length > 0))) {
+    // If comment or files are provided, use multipart/form-data
+    const formData = new FormData();
+    if (data.comment) {
+      formData.append('comment', data.comment);
+    }
+    if (data.files && data.files.length > 0) {
+      data.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
+    const response = await apiRequest.post<PurchaseRequest>(
+      `/api/prs/requests/${requestId}/approve/`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  } else {
+    // No comment or files, use regular POST
+    const response = await apiRequest.post<PurchaseRequest>(
+      `/api/prs/requests/${requestId}/approve/`,
+      {}
+    );
+    return response.data;
+  }
 }
 
 export async function rejectRequest(
   requestId: string,
   data: RejectRequestRequest
 ): Promise<PurchaseRequest> {
+  // Reject always requires comment, and may have files
+  const formData = new FormData();
+  formData.append('comment', data.comment);
+  if (data.files && data.files.length > 0) {
+    data.files.forEach((file) => {
+      formData.append('files', file);
+    });
+  }
   const response = await apiRequest.post<PurchaseRequest>(
     `/api/prs/requests/${requestId}/reject/`,
-    data
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
   );
   return response.data;
 }
@@ -197,11 +270,35 @@ export async function completeRequest(
   requestId: string,
   data?: CompleteRequestRequest
 ): Promise<PurchaseRequest> {
-  const response = await apiRequest.post<PurchaseRequest>(
-    `/api/prs/requests/${requestId}/complete/`,
-    data || {}
-  );
-  return response.data;
+  if (data && (data.comment || (data.files && data.files.length > 0))) {
+    // If comment or files are provided, use multipart/form-data
+    const formData = new FormData();
+    if (data.comment) {
+      formData.append('comment', data.comment);
+    }
+    if (data.files && data.files.length > 0) {
+      data.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
+    const response = await apiRequest.post<PurchaseRequest>(
+      `/api/prs/requests/${requestId}/complete/`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  } else {
+    // No comment or files, use regular POST
+    const response = await apiRequest.post<PurchaseRequest>(
+      `/api/prs/requests/${requestId}/complete/`,
+      {}
+    );
+    return response.data;
+  }
 }
 
 // Approval History
@@ -321,6 +418,7 @@ export async function deactivateUser(userId: string): Promise<UserWithTeams> {
 export interface FormTemplate {
   id: string;
   team: string | Team;
+  name?: string; // Optional name for the template
   version_number: number;
   is_active: boolean;
   created_by: string | null;
@@ -345,6 +443,7 @@ export interface FormField {
 
 export interface FormTemplateCreateRequest {
   team: string; // Team ID
+  name?: string; // Optional name for the template
   fields: Array<{
     field_id: string;
     name: string;
@@ -360,9 +459,53 @@ export interface FormTemplateCreateRequest {
 }
 
 export async function getFormTemplates(teamId?: string): Promise<FormTemplate[]> {
-  const url = teamId ? `/api/prs/form-templates/?team_id=${teamId}` : '/api/prs/form-templates/';
-  const response = await apiRequest.get<FormTemplate[]>(url);
-  return response.data;
+  try {
+    const url = teamId ? `/api/prs/form-templates/?team_id=${teamId}` : '/api/prs/form-templates/';
+    const response = await apiRequest.get<any>(url);
+    // Handle both paginated response (with results) and non-paginated array response
+    // Also handle error responses gracefully
+    if (response.data && response.data.error) {
+      // Error response - return empty array
+      return [];
+    }
+    if (Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.results)) {
+      return response.data.results;
+    }
+    return [];
+  } catch (error: any) {
+    // If there's an error (CORS, network, etc.), return empty array
+    console.error('Error fetching form templates:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all form templates globally (no team filter)
+ * Form templates are team-independent, so we fetch all templates without team filter
+ */
+export async function getAllFormTemplates(): Promise<FormTemplate[]> {
+  try {
+    // Get all form templates without team filter
+    const response = await apiRequest.get<any>('/api/prs/form-templates/');
+    // Handle both paginated response (with results) and non-paginated array response
+    // Also handle error responses gracefully
+    if (response.data && response.data.error) {
+      // Error response - return empty array
+      return [];
+    }
+    if (Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.results)) {
+      return response.data.results;
+    }
+    return [];
+  } catch (error: any) {
+    // If there's an error (CORS, network, etc.), return empty array
+    console.error('Error fetching all form templates:', error);
+    return [];
+  }
 }
 
 export async function createFormTemplate(data: FormTemplateCreateRequest): Promise<FormTemplate> {
@@ -423,9 +566,10 @@ export interface WorkflowStepApprover {
 }
 
 export interface WorkflowCreateRequest {
-  team: string; // Team ID
+  team?: string; // Team ID (optional, deprecated - WorkflowTemplate is team-agnostic)
   name: string;
-  steps: Array<{
+  description?: string;
+  steps?: Array<{
     step_name: string;
     step_order: number;
     is_finance_review: boolean;
@@ -435,8 +579,14 @@ export interface WorkflowCreateRequest {
 
 export async function getWorkflows(teamId?: string): Promise<Workflow[]> {
   const url = teamId ? `/api/prs/workflows/?team_id=${teamId}` : '/api/prs/workflows/';
-  const response = await apiRequest.get<Workflow[]>(url);
-  return response.data;
+  const response = await apiRequest.get<any>(url);
+  // Handle both paginated response (with results) and non-paginated array response
+  if (Array.isArray(response.data)) {
+    return response.data;
+  } else if (response.data && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  return [];
 }
 
 export async function getWorkflowByTeam(teamId: string): Promise<Workflow> {
@@ -494,6 +644,164 @@ export async function downloadAttachment(
     `/api/prs/requests/${requestId}/attachments/${attachmentId}/download/`,
     { responseType: 'blob' }
   );
+  return response.data;
+}
+
+// =============================================================================
+// MULTI-TEMPLATE SUPPORT
+// =============================================================================
+// Types are imported from 'src/types/api/prs'
+// Re-export them for convenience
+export type { WorkflowTemplate, TeamPurchaseConfig, EffectiveTemplateResponse } from 'src/types/api/prs';
+
+import { Lookup, PurchaseTypeLookup } from 'src/types/api/lookups';
+
+/**
+ * Fetch all active purchase types from backend
+ * Returns list of { id, code, title, ... } for purchase types
+ */
+export async function fetchPurchaseTypes(): Promise<Lookup[]> {
+  const response = await apiRequest.get<any>('/api/lookups/', {
+    params: {
+      is_active: true,
+    },
+  });
+  // Handle both paginated response (with results) and non-paginated array response
+  let allLookups: Lookup[] = [];
+  if (Array.isArray(response.data)) {
+    allLookups = response.data;
+  } else if (response.data && Array.isArray(response.data.results)) {
+    allLookups = response.data.results;
+  }
+  
+  // Filter to only return PURCHASE_TYPE lookups
+  return allLookups.filter((lookup) => lookup.type === 'PURCHASE_TYPE' && lookup.is_active);
+}
+
+/**
+ * Get all form templates for a team
+ */
+export async function getTeamFormTemplates(teamId: string): Promise<FormTemplate[]> {
+  const response = await apiRequest.get<FormTemplate[]>(`/api/prs/teams/${teamId}/form-templates/`);
+  return response.data;
+}
+
+/**
+ * Get all workflow templates for a team (if teamId provided) or all workflow templates globally
+ */
+export async function getTeamWorkflowTemplates(teamId?: string): Promise<WorkflowTemplate[]> {
+  if (teamId) {
+    const response = await apiRequest.get<WorkflowTemplate[]>(`/api/prs/teams/${teamId}/workflow-templates/`);
+    return response.data;
+  }
+  // If no teamId, use the global getAllWorkflowTemplates function
+  return getAllWorkflowTemplates();
+}
+
+/**
+ * Get all workflow templates globally (no team filter)
+ * Workflow templates are team-independent, so we fetch all templates without team filter
+ */
+export async function getAllWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+  try {
+    // Get all workflow templates directly from the endpoint
+    const response = await apiRequest.get<any>('/api/prs/workflows/');
+    // Handle both paginated response (with results) and non-paginated array response
+    // Also handle error responses gracefully
+    if (response.data && response.data.error) {
+      // Error response - return empty array
+      return [];
+    }
+    if (Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.results)) {
+      return response.data.results;
+    }
+    return [];
+  } catch (error: any) {
+    // If there's an error (CORS, network, etc.), return empty array
+    console.error('Error fetching all workflow templates:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all purchase configurations for a team
+ */
+export async function getTeamPurchaseConfigs(teamId: string): Promise<TeamPurchaseConfig[]> {
+  const response = await apiRequest.get<TeamPurchaseConfig[]>(`/api/prs/teams/${teamId}/configs/`);
+  return response.data;
+}
+
+/**
+ * Get all purchase configurations (global - no team filter)
+ * For admin views that need to see all configs across all teams
+ */
+export async function getAllPurchaseConfigs(): Promise<TeamPurchaseConfig[]> {
+  const response = await apiRequest.get<any>('/api/prs/configs/');
+  // Handle both paginated response (with results) and non-paginated array response
+  if (Array.isArray(response.data)) {
+    return response.data;
+  } else if (response.data && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  return [];
+}
+
+/**
+ * Get the effective template pair (form + workflow) for a team + purchase type
+ * This is called when creating a new purchase request to determine which templates to use
+ */
+export async function getEffectiveTemplate(
+  teamId: string,
+  purchaseType: string
+): Promise<EffectiveTemplateResponse> {
+  const response = await apiRequest.get<EffectiveTemplateResponse>(
+    `/api/prs/teams/${teamId}/effective-template/?purchase_type=${encodeURIComponent(purchaseType)}`
+  );
+  return response.data;
+}
+
+/**
+ * Create a new team purchase configuration
+ * Note: Backend endpoint needs to be implemented at /api/prs/configs/ or /api/prs/teams/{id}/configs/
+ */
+export interface TeamPurchaseConfigCreateRequest {
+  team: string; // Team ID
+  purchase_type: string; // Purchase type lookup ID
+  form_template: string; // Form template ID
+  workflow_template: string; // Workflow template ID
+  is_active?: boolean;
+}
+
+export async function createTeamPurchaseConfig(
+  data: TeamPurchaseConfigCreateRequest
+): Promise<TeamPurchaseConfig> {
+  // TODO: Update this endpoint when backend implements it
+  // Expected endpoint: POST /api/prs/configs/ or POST /api/prs/teams/{id}/configs/
+  const response = await apiRequest.post<TeamPurchaseConfig>('/api/prs/configs/', data);
+  return response.data;
+}
+
+/**
+ * Update a team purchase configuration
+ * Note: Backend endpoint needs to be implemented at /api/prs/configs/{id}/
+ */
+export interface TeamPurchaseConfigUpdateRequest {
+  team?: string;
+  purchase_type?: string;
+  form_template?: string;
+  workflow_template?: string;
+  is_active?: boolean;
+}
+
+export async function updateTeamPurchaseConfig(
+  id: string,
+  data: TeamPurchaseConfigUpdateRequest
+): Promise<TeamPurchaseConfig> {
+  // TODO: Update this endpoint when backend implements it
+  // Expected endpoint: PATCH /api/prs/configs/{id}/
+  const response = await apiRequest.patch<TeamPurchaseConfig>(`/api/prs/configs/${id}/`, data);
   return response.data;
 }
 

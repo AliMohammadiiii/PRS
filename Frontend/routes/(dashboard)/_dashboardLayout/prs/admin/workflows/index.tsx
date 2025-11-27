@@ -18,9 +18,9 @@ import {
   Autocomplete,
   Checkbox,
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUp, ArrowDown, TickCircle } from 'iconsax-react';
+import { Add, Edit, ArrowUp, ArrowDown, TickCircle } from 'iconsax-react';
 import PageHeader from '../../../../components/PageHeader';
-import { Team, Workflow, WorkflowStep, WorkflowStepApprover } from 'src/types/api/prs';
+import { WorkflowTemplate, WorkflowTemplateStep } from 'src/types/api/prs';
 import { Lookup } from 'src/types/api/lookups';
 import * as prsApi from 'src/services/api/prs';
 import * as lookupsApi from 'src/services/api/lookups';
@@ -34,41 +34,21 @@ export const Route = createFileRoute('/(dashboard)/_dashboardLayout/prs/admin/wo
 
 function WorkflowsAdminPage() {
   const navigate = useNavigate();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
-  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowTemplate | null>(null);
   const [roles, setRoles] = useState<Lookup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createWorkflowDialogOpen, setCreateWorkflowDialogOpen] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState('');
   const [stepDialogOpen, setStepDialogOpen] = useState(false);
-  const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
+  const [editingStep, setEditingStep] = useState<WorkflowTemplateStep | null>(null);
   const [stepFormData, setStepFormData] = useState({
     step_name: '',
     step_order: 1,
     is_finance_review: false,
     role_ids: [] as string[],
   });
-
-  const loadTeams = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await prsApi.getTeams();
-      setTeams(data.filter(t => t.is_active));
-      if (data.length > 0 && !selectedTeam) {
-        setSelectedTeam(data[0].id);
-      }
-    } catch (err: any) {
-      const errorMessage = extractErrorMessage(err);
-      toast({
-        title: 'خطا در بارگذاری تیم‌ها',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-      logger.error('Error loading teams:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedTeam]);
 
   const loadRoles = useCallback(async () => {
     try {
@@ -80,59 +60,79 @@ function WorkflowsAdminPage() {
     }
   }, []);
 
-  const loadWorkflow = useCallback(async () => {
-    if (!selectedTeam) {
-      setWorkflow(null);
+  const loadWorkflowTemplates = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Load all workflow templates globally (no team filter)
+      const data = await prsApi.getAllWorkflowTemplates();
+      // Ensure data is an array
+      if (!Array.isArray(data)) {
+        logger.error('getAllWorkflowTemplates did not return an array:', data);
+        setWorkflowTemplates([]);
+        setSelectedWorkflow(null);
+        return;
+      }
+      setWorkflowTemplates(data);
+      // Auto-select first template if available
+      if (data.length > 0 && !selectedWorkflow) {
+        setSelectedWorkflow(data[0]);
+      } else if (data.length === 0) {
+        setSelectedWorkflow(null);
+      }
+    } catch (err: any) {
+      const errorMessage = extractErrorMessage(err);
+      toast({
+        title: 'خطا در بارگذاری گردش‌های کار',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      logger.error('Error loading workflow templates:', err);
+      setWorkflowTemplates([]);
+      setSelectedWorkflow(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedWorkflow]);
+
+  useEffect(() => {
+    loadRoles();
+    loadWorkflowTemplates();
+  }, [loadRoles, loadWorkflowTemplates]);
+
+  const handleCreateWorkflow = async () => {
+    if (!newWorkflowName.trim()) {
+      toast({
+        title: 'خطا',
+        description: 'نام گردش کار الزامی است',
+        variant: 'destructive',
+      });
       return;
     }
 
     try {
-      setIsLoading(true);
-      const data = await prsApi.getWorkflowByTeam(selectedTeam);
-      setWorkflow(data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setWorkflow(null);
-      } else {
-        const errorMessage = extractErrorMessage(err);
-        toast({
-          title: 'خطا در بارگذاری گردش کار',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-        logger.error('Error loading workflow:', err);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedTeam]);
-
-  useEffect(() => {
-    loadTeams();
-    loadRoles();
-  }, [loadTeams, loadRoles]);
-
-  useEffect(() => {
-    if (selectedTeam) {
-      loadWorkflow();
-    }
-  }, [selectedTeam, loadWorkflow]);
-
-  const handleCreateWorkflow = async () => {
-    if (!selectedTeam) return;
-
-    try {
       setIsSubmitting(true);
-      await prsApi.createWorkflow({
-        team: selectedTeam,
-        name: `Workflow for ${teams.find(t => t.id === selectedTeam)?.name}`,
+      // Create workflow template (team-agnostic)
+      const created = await prsApi.createWorkflow({
+        name: newWorkflowName.trim(),
         steps: [],
       });
       toast({
         title: 'موفق',
         description: 'گردش کار با موفقیت ایجاد شد. حالا می‌توانید مراحل را اضافه کنید.',
       });
-      await loadWorkflow();
+      setCreateWorkflowDialogOpen(false);
+      setNewWorkflowName('');
+      await loadWorkflowTemplates();
+      // Select the newly created workflow
+      const updated = await prsApi.getAllWorkflowTemplates();
+      if (!Array.isArray(updated)) {
+        logger.error('getAllWorkflowTemplates did not return an array:', updated);
+        return;
+      }
+      const newWorkflow = updated.find(w => w.id === created.id) || updated[updated.length - 1];
+      if (newWorkflow) {
+        setSelectedWorkflow(newWorkflow);
+      }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -147,10 +147,10 @@ function WorkflowsAdminPage() {
   };
 
   const handleAddStep = () => {
-    if (!workflow) return;
+    if (!selectedWorkflow) return;
     
-    const nextOrder = workflow.steps.length > 0 
-      ? Math.max(...workflow.steps.map(s => s.step_order)) + 1 
+    const nextOrder = selectedWorkflow.steps && selectedWorkflow.steps.length > 0 
+      ? Math.max(...selectedWorkflow.steps.map(s => s.step_order)) + 1 
       : 1;
     
     setStepFormData({
@@ -163,24 +163,26 @@ function WorkflowsAdminPage() {
     setStepDialogOpen(true);
   };
 
-  const handleEditStep = (step: WorkflowStep) => {
+  const handleEditStep = (step: WorkflowTemplateStep) => {
+    // WorkflowTemplateStep has approvers with role info
+    const roleIds = step.approvers ? step.approvers.map(a => (a as any).role_id || (a as any).role).filter(Boolean) : [];
     setStepFormData({
       step_name: step.step_name,
       step_order: step.step_order,
       is_finance_review: step.is_finance_review,
-      role_ids: step.approvers.map(a => a.role_id),
+      role_ids: roleIds,
     });
     setEditingStep(step);
     setStepDialogOpen(true);
   };
 
   const handleSaveWorkflow = async () => {
-    if (!workflow) return;
+    if (!selectedWorkflow) return;
 
     try {
       setIsSubmitting(true);
       
-      const sortedSteps = [...workflow.steps].sort((a, b) => a.step_order - b.step_order);
+      const sortedSteps = selectedWorkflow.steps ? [...selectedWorkflow.steps].sort((a, b) => a.step_order - b.step_order) : [];
       const updatedSteps = editingStep
         ? sortedSteps.map(s => 
             s.id === editingStep.id
@@ -194,7 +196,7 @@ function WorkflowsAdminPage() {
                   step_name: s.step_name,
                   step_order: s.step_order,
                   is_finance_review: s.is_finance_review,
-                  role_ids: s.approvers.map(a => a.role_id),
+                  role_ids: s.approvers ? s.approvers.map(a => (a as any).role_id || (a as any).role).filter(Boolean) : [],
                 }
           )
         : [
@@ -202,7 +204,7 @@ function WorkflowsAdminPage() {
               step_name: s.step_name,
               step_order: s.step_order,
               is_finance_review: s.is_finance_review,
-              role_ids: s.approvers.map(a => a.role_id),
+              role_ids: s.approvers ? s.approvers.map(a => (a as any).role_id || (a as any).role).filter(Boolean) : [],
             })),
             {
               step_name: stepFormData.step_name,
@@ -212,9 +214,9 @@ function WorkflowsAdminPage() {
             },
           ];
 
-      await prsApi.updateWorkflow(workflow.id, {
-        team: typeof workflow.team === 'string' ? workflow.team : workflow.team.id,
-        name: workflow.name,
+      // Use updateWorkflow which should work with WorkflowTemplate IDs
+      await prsApi.updateWorkflow(selectedWorkflow.id, {
+        name: selectedWorkflow.name,
         steps: updatedSteps,
       });
 
@@ -223,7 +225,17 @@ function WorkflowsAdminPage() {
         description: editingStep ? 'مرحله با موفقیت به‌روزرسانی شد' : 'مرحله با موفقیت اضافه شد',
       });
       setStepDialogOpen(false);
-      await loadWorkflow();
+      await loadWorkflowTemplates();
+      // Reload selected workflow
+      const updated = await prsApi.getAllWorkflowTemplates();
+      if (!Array.isArray(updated)) {
+        logger.error('getAllWorkflowTemplates did not return an array:', updated);
+        return;
+      }
+      const reloaded = updated.find(w => w.id === selectedWorkflow.id);
+      if (reloaded) {
+        setSelectedWorkflow(reloaded);
+      }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -237,36 +249,32 @@ function WorkflowsAdminPage() {
     }
   };
 
-  const sortedSteps = workflow ? [...workflow.steps].sort((a, b) => a.step_order - b.step_order) : [];
+  const sortedSteps = selectedWorkflow && selectedWorkflow.steps 
+    ? [...selectedWorkflow.steps].sort((a, b) => a.step_order - b.step_order) 
+    : [];
   const hasFinanceStep = sortedSteps.some(s => s.is_finance_review);
 
   return (
     <>
-      <PageHeader title="مدیریت گردش‌های کار" breadcrumb={['مدیریت', 'گردش‌های کار']} />
-
-      {/* Team Selector */}
-      <Box sx={{ mb: 3 }}>
-        <FormControl fullWidth>
-          <InputLabel>تیم</InputLabel>
-          <Select
-            value={selectedTeam || ''}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            label="تیم"
-          >
-            {teams.map((team) => (
-              <MenuItem key={team.id} value={team.id}>
-                {team.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+      <PageHeader title="مدیریت گردش‌های کار" breadcrumb={['مدیریت', 'گردش‌های کار']}>
+        <Button
+          variant="contained"
+          startIcon={<Add size={20} />}
+          onClick={() => {
+            setNewWorkflowName('');
+            setCreateWorkflowDialogOpen(true);
+          }}
+          disabled={isSubmitting}
+        >
+          گردش کار جدید
+        </Button>
+      </PageHeader>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      ) : !workflow ? (
+      ) : workflowTemplates.length === 0 ? (
         <Box
           sx={{
             bgcolor: 'white',
@@ -276,37 +284,58 @@ function WorkflowsAdminPage() {
           }}
         >
           <Typography variant="h6" sx={{ mb: 2 }}>
-            این تیم هنوز گردش کار ندارد
+            هنوز گردش کاری ایجاد نشده است
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add size={20} />}
-            onClick={handleCreateWorkflow}
-            disabled={isSubmitting || !selectedTeam}
-          >
-            ایجاد گردش کار
-          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            برای شروع، یک گردش کار جدید ایجاد کنید
+          </Typography>
         </Box>
       ) : (
         <>
-          {/* Workflow Info */}
-          <Box
-            sx={{
-              bgcolor: 'white',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-            }}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">{workflow.name}</Typography>
-              <Chip
-                label={workflow.is_active ? 'فعال' : 'غیرفعال'}
-                color={workflow.is_active ? 'success' : 'default'}
-                size="small"
-              />
-            </Box>
+          {/* Workflow Template Selector */}
+          <Box sx={{ mb: 3 }}>
+            <FormControl fullWidth>
+              <InputLabel>گردش کار</InputLabel>
+              <Select
+                value={selectedWorkflow?.id || ''}
+                onChange={(e) => {
+                  const workflow = workflowTemplates.find(w => w.id === e.target.value);
+                  setSelectedWorkflow(workflow || null);
+                }}
+                label="گردش کار"
+              >
+                {workflowTemplates.map((workflow) => (
+                  <MenuItem key={workflow.id} value={workflow.id}>
+                    {workflow.name} (v{workflow.version_number})
+                    {workflow.is_active && ' ✓'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
+
+          {selectedWorkflow && (
+            <>
+              {/* Workflow Info */}
+              <Box
+                sx={{
+                  bgcolor: 'white',
+                  borderRadius: 2,
+                  p: 3,
+                  mb: 3,
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h6">
+                    {selectedWorkflow.name} - نسخه {selectedWorkflow.version_number}
+                  </Typography>
+                  <Chip
+                    label={selectedWorkflow.is_active ? 'فعال' : 'غیرفعال'}
+                    color={selectedWorkflow.is_active ? 'success' : 'default'}
+                    size="small"
+                  />
+                </Box>
+              </Box>
 
           {/* Steps List */}
           <Box
@@ -360,7 +389,7 @@ function WorkflowsAdminPage() {
                           )}
                         </Box>
                         <Typography variant="caption" color="text.secondary" sx={{ mr: 6 }}>
-                          تأییدکنندگان: {step.approvers.length > 0
+                          تأییدکنندگان: {step.approvers && step.approvers.length > 0
                             ? step.approvers.map(a => a.role_title).join(', ')
                             : 'هیچ‌کدام'}
                         </Typography>
@@ -386,8 +415,34 @@ function WorkflowsAdminPage() {
               </Box>
             )}
           </Box>
+            </>
+          )}
         </>
       )}
+
+      {/* Create Workflow Dialog */}
+      <Dialog open={createWorkflowDialogOpen} onClose={() => setCreateWorkflowDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>ایجاد گردش کار جدید</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="نام گردش کار *"
+            value={newWorkflowName}
+            onChange={(e) => setNewWorkflowName(e.target.value)}
+            sx={{ mt: 2 }}
+            required
+            placeholder="مثال: گردش کار تأیید خرید کالا"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateWorkflowDialogOpen(false)} disabled={isSubmitting}>
+            انصراف
+          </Button>
+          <Button onClick={handleCreateWorkflow} variant="contained" disabled={isSubmitting}>
+            ایجاد
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Step Dialog */}
       <Dialog open={stepDialogOpen} onClose={() => setStepDialogOpen(false)} maxWidth="md" fullWidth>

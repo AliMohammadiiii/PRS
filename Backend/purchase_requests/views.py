@@ -114,6 +114,59 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                 f'Request with status "{status_code}" cannot be edited. '
                 f'Only requests with status {", ".join(editable_statuses)} can be edited.'
             )
+    
+    def _process_uploaded_files(self, purchase_request: PurchaseRequest, files, user, approval_history=None):
+        """Process uploaded files and create Attachment objects linked to approval history"""
+        from attachments.models import Attachment
+        from django.core.validators import FileExtensionValidator
+        
+        allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx', 'xlsx', 'xls']
+        max_size = 10 * 1024 * 1024  # 10 MB
+        
+        for file_obj in files:
+            # Validate file extension
+            file_extension = file_obj.name.split('.')[-1].lower() if '.' in file_obj.name else ''
+            if file_extension not in allowed_extensions:
+                raise ValidationError(
+                    f'Invalid file type for "{file_obj.name}". Allowed types: {", ".join(allowed_extensions)}'
+                )
+            
+            # Validate file size
+            if file_obj.size > max_size:
+                raise ValidationError(
+                    f'File "{file_obj.name}" exceeds maximum size of {max_size / (1024 * 1024)} MB.'
+                )
+            
+            # Extract file information
+            filename = file_obj.name
+            file_size = file_obj.size
+            
+            # Determine file type from content_type or extension
+            file_type = file_obj.content_type if hasattr(file_obj, 'content_type') and file_obj.content_type else ''
+            if not file_type:
+                # Fallback to extension
+                mime_types = {
+                    'pdf': 'application/pdf',
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'xls': 'application/vnd.ms-excel',
+                }
+                file_type = mime_types.get(file_extension, file_extension)
+            
+            # Create attachment
+            Attachment.objects.create(
+                request=purchase_request,
+                category=None,  # No category for workflow action attachments
+                approval_history=approval_history,
+                filename=filename,
+                file_path=file_obj,
+                file_size=file_size,
+                file_type=file_type,
+                uploaded_by=user,
+            )
 
     @extend_schema(
         summary="Create a new draft purchase request",
@@ -184,7 +237,16 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Submit a purchase request for approval",
-        description="Submits a purchase request for approval. Validates required fields and attachments, then transitions status to PENDING_APPROVAL or IN_REVIEW and sets the first workflow step.",
+        description="Submits a purchase request for approval. Validates required fields and attachments, then transitions status to PENDING_APPROVAL or IN_REVIEW and sets the first workflow step. Optionally accepts a comment and file attachments.",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'comment': {'type': 'string', 'description': 'Optional comment for submission'},
+                    'files': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}, 'description': 'Optional file attachments'}
+                }
+            }
+        },
         responses={
             200: PurchaseRequestReadSerializer,
             400: {'description': 'Validation error - missing required fields or attachments'},
@@ -220,45 +282,113 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                 'message': 'Cannot submit request: required attachments are missing.'
             })
         
-        # Get first workflow step
-        first_step = services.get_first_workflow_step(purchase_request.team)
-        if not first_step:
-            raise ValidationError(
-                'Cannot submit request: no active workflow found for this team.'
+        # Get first workflow step - use workflow_template if set, otherwise fall back to legacy
+        from workflows.models import WorkflowStep, WorkflowTemplateStep
+        
+        if purchase_request.workflow_template:
+            # New template-based workflow
+            first_step = services.get_first_workflow_step_for_request(purchase_request)
+            if not first_step:
+                raise ValidationError(
+                    'Cannot submit request: no active workflow template steps found.'
+                )
+            
+            # Validate workflow template configuration
+            workflow_steps_qs = WorkflowTemplateStep.objects.filter(
+                workflow_template=purchase_request.workflow_template,
+                is_active=True,
+            )
+        else:
+            # Legacy workflow (fallback for old requests)
+            first_step = services.get_first_workflow_step(purchase_request.team)
+            if not first_step:
+                raise ValidationError(
+                    'Cannot submit request: no active workflow found for this team.'
+                )
+            
+            # Validate legacy workflow configuration
+            workflow_steps_qs = WorkflowStep.objects.filter(
+                workflow=first_step.workflow,
+                is_active=True,
             )
         
         # Validate workflow configuration according to PRD:
         # - At least one non-finance step
-        # - Finance step is optional (for test scenarios like S04)
-        # Note: PRD requires finance step, but test scenarios may omit it
-        from workflows.models import WorkflowStep  # Local import to avoid circular deps at module import time
-        workflow_steps_qs = WorkflowStep.objects.filter(
-            workflow=first_step.workflow,
-            is_active=True,
-        )
+        # - Finance step is optional (for test scenarios)
         has_finance_step = workflow_steps_qs.filter(is_finance_review=True).exists()
         has_non_finance_step = workflow_steps_qs.filter(is_finance_review=False).exists()
         workflow_errors = []
         if not has_non_finance_step:
             workflow_errors.append('Workflow must contain at least one non‑finance approval step.')
-        # Finance step is optional - workflows without finance steps will go to FULLY_APPROVED
-        # when all approval steps are complete (useful for test scenarios)
         if workflow_errors:
             raise ValidationError({
                 'workflow': workflow_errors,
-                'message': 'Cannot submit request: team workflow configuration is invalid.'
+                'message': 'Cannot submit request: workflow configuration is invalid.'
             })
         
         # Transition status
-        # From DRAFT/REJECTED/RESUBMITTED, transition to PENDING_APPROVAL or IN_REVIEW
-        # For simplicity, we'll use PENDING_APPROVAL as the initial status
         new_status = services.get_pending_approval_status()
         
         # Update purchase request
         purchase_request.status = new_status
-        purchase_request.current_step = first_step
+        services.set_current_step(purchase_request, first_step)
         purchase_request.submitted_at = timezone.now()
         purchase_request.save()
+        
+        # Get comment and files from request
+        comment = request.data.get('comment', '').strip() or None
+        uploaded_files = request.FILES.getlist('files') if 'files' in request.FILES else []
+        
+        # Create approval history entry if comment or files are provided
+        approval_history = None
+        if comment or uploaded_files:
+            from approvals.models import ApprovalHistory
+            
+            # Determine the role under which the user is submitting
+            approval_role_id = None
+            from accounts.models import AccessScope
+            user_role_ids = AccessScope.objects.filter(
+                user=request.user,
+                team=purchase_request.team,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+            
+            if user_role_ids.exists():
+                # For submission, we don't have a specific step role, so we'll leave it null
+                # or use the requestor's primary role if available
+                approval_role_id = user_role_ids.first()
+            
+            # Create approval history entry for submission
+            # Note: For submission, we track comments/files even though it's not a formal approval action
+            # We use the first step as the step reference for tracking purposes
+            from workflows.models import WorkflowTemplateStep
+            if isinstance(first_step, WorkflowTemplateStep):
+                approval_history = ApprovalHistory.objects.create(
+                    request=purchase_request,
+                    template_step=first_step,
+                    approver=request.user,
+                    role_id=approval_role_id,
+                    action=ApprovalHistory.APPROVE,  # Use APPROVE as action type for submission
+                    comment=comment
+                )
+            else:
+                approval_history = ApprovalHistory.objects.create(
+                    request=purchase_request,
+                    step=first_step,
+                    approver=request.user,
+                    role_id=approval_role_id,
+                    action=ApprovalHistory.APPROVE,  # Use APPROVE as action type for submission
+                    comment=comment
+                )
+        
+        # Process uploaded files and link them to approval history
+        if uploaded_files and approval_history:
+            self._process_uploaded_files(
+                purchase_request=purchase_request,
+                files=uploaded_files,
+                user=request.user,
+                approval_history=approval_history
+            )
         
         # Create audit event
         services.create_audit_event_for_request_submitted(
@@ -545,15 +675,16 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Approve a purchase request at current workflow step",
-        description="Approves a purchase request at the current workflow step. If all approvers for the step have approved, the request moves to the next step or transitions to FINANCE_REVIEW status.",
+        description="Approves a purchase request at the current workflow step. If all approvers for the step have approved, the request moves to the next step or transitions to FINANCE_REVIEW status. Optionally accepts a comment and file attachments.",
         request={
-            'application/json': {
+            'multipart/form-data': {
                 'type': 'object',
                 'properties': {
                     'comment': {
                         'type': 'string',
                         'description': 'Optional comment from the approver'
-                    }
+                    },
+                    'files': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}, 'description': 'Optional file attachments'}
                 }
             }
         },
@@ -570,8 +701,11 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         """Approve a purchase request at the current workflow step"""
         purchase_request = self.get_object()
         
+        # Get current step (works with both legacy and template-based)
+        current_step = services.get_current_step(purchase_request)
+        
         # Ensure request has a current step
-        if not purchase_request.current_step:
+        if not current_step:
             raise ValidationError(
                 'Cannot approve request: request does not have a current workflow step.'
             )
@@ -587,17 +721,25 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         # Check user is an approver for this step
         services.ensure_user_is_step_approver(request.user, purchase_request)
         
-        current_step = purchase_request.current_step
         comment = request.data.get('comment', '').strip() or None
+        uploaded_files = request.FILES.getlist('files') if 'files' in request.FILES else []
 
-        # Determine the role under which the user is approving, based on the
-        # roles configured for this step and the user's AccessScope on the team.
-        from workflows.models import WorkflowStepApprover
+        # Determine the role under which the user is approving
+        from workflows.models import (
+            WorkflowStepApprover, WorkflowTemplateStepApprover,
+            WorkflowTemplateStep
+        )
 
-        step_role_ids = WorkflowStepApprover.objects.filter(
-            step=current_step,
-            is_active=True,
-        ).values_list('role_id', flat=True)
+        if isinstance(current_step, WorkflowTemplateStep):
+            step_role_ids = WorkflowTemplateStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        else:
+            step_role_ids = WorkflowStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
 
         approval_role_id = None
         if step_role_ids.exists():
@@ -609,14 +751,33 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             ).values_list('role_id', flat=True).first()
 
         # Create approval history record
-        ApprovalHistory.objects.create(
-            request=purchase_request,
-            step=current_step,
-            approver=request.user,
-            role_id=approval_role_id,
-            action=ApprovalHistory.APPROVE,
-            comment=comment
-        )
+        if isinstance(current_step, WorkflowTemplateStep):
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                template_step=current_step,
+                approver=request.user,
+                role_id=approval_role_id,
+                action=ApprovalHistory.APPROVE,
+                comment=comment
+            )
+        else:
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                step=current_step,
+                approver=request.user,
+                role_id=approval_role_id,
+                action=ApprovalHistory.APPROVE,
+                comment=comment
+            )
+        
+        # Process uploaded files and link them to approval history
+        if uploaded_files:
+            self._process_uploaded_files(
+                purchase_request=purchase_request,
+                files=uploaded_files,
+                user=request.user,
+                approval_history=approval_history
+            )
         
         # Check if all approvers have approved
         if services.have_all_approvers_approved(purchase_request, current_step):
@@ -625,16 +786,15 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             
             if next_step and not next_step.is_finance_review:
                 # Move to next non-finance step
-                purchase_request.current_step = next_step
+                services.set_current_step(purchase_request, next_step)
                 purchase_request.status = services.get_in_review_status()
             elif next_step and next_step.is_finance_review:
                 # Move to finance review step
-                purchase_request.current_step = next_step
+                services.set_current_step(purchase_request, next_step)
                 purchase_request.status = services.get_finance_review_status()
             else:
-                # No next step - should not happen if workflow is properly configured
-                # But handle gracefully by setting to fully approved
-                purchase_request.current_step = None
+                # No next step - workflow complete
+                services.set_current_step(purchase_request, None)
                 purchase_request.status = services.get_fully_approved_status()
             
             purchase_request.save()
@@ -655,9 +815,9 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Reject a purchase request at current workflow step",
-        description="Rejects a purchase request at the current workflow step. Requires a comment with at least 10 characters explaining the rejection.",
+        description="Rejects a purchase request at the current workflow step. Requires a comment with at least 10 characters explaining the rejection. Optionally accepts file attachments.",
         request={
-            'application/json': {
+            'multipart/form-data': {
                 'type': 'object',
                 'required': ['comment'],
                 'properties': {
@@ -665,7 +825,8 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                         'type': 'string',
                         'description': 'Required rejection reason (minimum 10 characters)',
                         'minLength': 10
-                    }
+                    },
+                    'files': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}, 'description': 'Optional file attachments'}
                 }
             }
         },
@@ -689,8 +850,11 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                 'comment': 'Rejection requires a comment with at least 10 characters.'
             })
         
+        # Get current step (works with both legacy and template-based)
+        current_step = services.get_current_step(purchase_request)
+        
         # Ensure request has a current step
-        if not purchase_request.current_step:
+        if not current_step:
             raise ValidationError(
                 'Cannot reject request: request does not have a current workflow step.'
             )
@@ -706,17 +870,25 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         # Check user is an approver for this step
         services.ensure_user_is_step_approver(request.user, purchase_request)
         
-        current_step = purchase_request.current_step
         old_status_code = status_code
+        uploaded_files = request.FILES.getlist('files') if 'files' in request.FILES else []
 
-        # Determine the role under which the user is rejecting, based on the
-        # roles configured for this step and the user's AccessScope on the team.
-        from workflows.models import WorkflowStepApprover
+        # Determine the role under which the user is rejecting
+        from workflows.models import (
+            WorkflowStepApprover, WorkflowTemplateStepApprover,
+            WorkflowTemplateStep
+        )
 
-        step_role_ids = WorkflowStepApprover.objects.filter(
-            step=current_step,
-            is_active=True,
-        ).values_list('role_id', flat=True)
+        if isinstance(current_step, WorkflowTemplateStep):
+            step_role_ids = WorkflowTemplateStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        else:
+            step_role_ids = WorkflowStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
 
         rejection_role_id = None
         if step_role_ids.exists():
@@ -728,18 +900,37 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             ).values_list('role_id', flat=True).first()
 
         # Create approval history record
-        ApprovalHistory.objects.create(
-            request=purchase_request,
-            step=current_step,
-            approver=request.user,
-            role_id=rejection_role_id,
-            action=ApprovalHistory.REJECT,
-            comment=comment
-        )
+        if isinstance(current_step, WorkflowTemplateStep):
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                template_step=current_step,
+                approver=request.user,
+                role_id=rejection_role_id,
+                action=ApprovalHistory.REJECT,
+                comment=comment
+            )
+        else:
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                step=current_step,
+                approver=request.user,
+                role_id=rejection_role_id,
+                action=ApprovalHistory.REJECT,
+                comment=comment
+            )
+        
+        # Process uploaded files and link them to approval history
+        if uploaded_files:
+            self._process_uploaded_files(
+                purchase_request=purchase_request,
+                files=uploaded_files,
+                user=request.user,
+                approval_history=approval_history
+            )
         
         # Update purchase request
         purchase_request.status = services.get_rejected_status()
-        purchase_request.current_step = None
+        services.set_current_step(purchase_request, None)
         purchase_request.rejection_comment = comment
         purchase_request.save()
         
@@ -761,7 +952,19 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Complete a purchase request (Finance Review)",
-        description="Marks a purchase request in FINANCE_REVIEW status as COMPLETED. Only finance reviewers assigned to the finance review step can complete requests. This triggers a completion email and freezes the request.",
+        description="Marks a purchase request in FINANCE_REVIEW status as COMPLETED. Only finance reviewers assigned to the finance review step can complete requests. This triggers a completion email and freezes the request. Optionally accepts a comment and file attachments.",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'comment': {
+                        'type': 'string',
+                        'description': 'Optional comment from the finance reviewer'
+                    },
+                    'files': {'type': 'array', 'items': {'type': 'string', 'format': 'binary'}, 'description': 'Optional file attachments'}
+                }
+            }
+        },
         responses={
             200: PurchaseRequestReadSerializer,
             400: {'description': 'Validation error - request not in finance review state or missing current_step'},
@@ -790,14 +993,17 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                 'Only requests in FINANCE_REVIEW or FULLY_APPROVED status can be completed.'
             )
         
+        # Get current step (works with both legacy and template-based)
+        current_step = services.get_current_step(purchase_request)
+        
         # Ensure request has a current step
-        if not purchase_request.current_step:
+        if not current_step:
             raise ValidationError(
                 'Cannot complete request: request does not have a current workflow step.'
             )
         
         # Ensure current step is the finance review step
-        if not purchase_request.current_step.is_finance_review:
+        if not current_step.is_finance_review:
             raise ValidationError(
                 'Cannot complete request: current step is not a finance review step.'
             )
@@ -813,23 +1019,31 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         # Check user is a finance reviewer for this step
         services.ensure_user_is_finance_reviewer(request.user, purchase_request)
         
-        current_step = purchase_request.current_step
         comment = request.data.get('comment', '').strip() or None
+        uploaded_files = request.FILES.getlist('files') if 'files' in request.FILES else []
 
         # Update purchase request to COMPLETED
         purchase_request.status = services.get_completed_status()
         purchase_request.completed_at = timezone.now()
-        purchase_request.current_step = None  # Workflow is complete
+        services.set_current_step(purchase_request, None)  # Workflow is complete
         purchase_request.save()
 
-        # Determine the role under which the user is completing, based on the
-        # roles configured for this step and the user's AccessScope on the team.
-        from workflows.models import WorkflowStepApprover
+        # Determine the role under which the user is completing
+        from workflows.models import (
+            WorkflowStepApprover, WorkflowTemplateStepApprover,
+            WorkflowTemplateStep
+        )
 
-        step_role_ids = WorkflowStepApprover.objects.filter(
-            step=current_step,
-            is_active=True,
-        ).values_list('role_id', flat=True)
+        if isinstance(current_step, WorkflowTemplateStep):
+            step_role_ids = WorkflowTemplateStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        else:
+            step_role_ids = WorkflowStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
 
         completion_role_id = None
         if step_role_ids.exists():
@@ -841,14 +1055,33 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             ).values_list('role_id', flat=True).first()
 
         # Create approval history record for finance completion
-        ApprovalHistory.objects.create(
-            request=purchase_request,
-            step=current_step,
-            approver=request.user,
-            role_id=completion_role_id,
-            action=ApprovalHistory.APPROVE,  # Using APPROVE action for consistency
-            comment=comment
-        )
+        if isinstance(current_step, WorkflowTemplateStep):
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                template_step=current_step,
+                approver=request.user,
+                role_id=completion_role_id,
+                action=ApprovalHistory.APPROVE,
+                comment=comment
+            )
+        else:
+            approval_history = ApprovalHistory.objects.create(
+                request=purchase_request,
+                step=current_step,
+                approver=request.user,
+                role_id=completion_role_id,
+                action=ApprovalHistory.APPROVE,
+                comment=comment
+            )
+        
+        # Process uploaded files and link them to approval history
+        if uploaded_files:
+            self._process_uploaded_files(
+                purchase_request=purchase_request,
+                files=uploaded_files,
+                user=request.user,
+                approval_history=approval_history
+            )
         
         # Create audit event (pass step before it was cleared)
         services.create_audit_event_for_request_completed(

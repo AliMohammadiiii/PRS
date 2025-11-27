@@ -10,9 +10,13 @@ import {
   CircularProgress,
   Select,
   MenuItem,
+  Modal,
+  IconButton,
 } from 'injast-core/components';
 import { defaultColors } from 'injast-core/constants';
 import { z } from 'zod';
+import { Chip, Collapse, Alert, AlertTitle, useTheme } from '@mui/material';
+import { ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X, Upload, Trash2 } from 'lucide-react';
 import PageHeader from '../../../../components/PageHeader';
 // Team is now selected globally in the header via TeamContext (non-admins).
 // Admins can override team per request via a local dropdown on this page.
@@ -22,6 +26,8 @@ import {
   FormTemplateResponse,
   PurchaseRequest,
   FormField,
+  EffectiveTemplateResponse,
+  WorkflowTemplateStepSummary,
 } from 'src/types/api/prs';
 import {
   extractInitialValuesFromFieldValues,
@@ -30,11 +36,10 @@ import {
   isFieldValueEmpty,
 } from '@/components/prs/fieldUtils';
 import * as prsApi from 'src/services/api/prs';
-import * as lookupApi from 'src/services/api/lookups';
 import { Lookup } from 'src/types/api/lookups';
 import logger from '@/lib/logger';
 import { toast } from '@/hooks/use-toast';
-import { extractErrorMessage } from 'src/shared/utils/prsUtils';
+import { extractErrorMessage, isEditableStatus } from 'src/shared/utils/prsUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTeam } from 'src/client/contexts/TeamContext';
 import { useAuth } from 'src/client/contexts/AuthContext';
@@ -60,24 +65,46 @@ export const Route = createFileRoute('/(dashboard)/_dashboardLayout/prs/requests
 
 function NewPurchaseRequestPage() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const { requestId: editRequestId } = Route.useSearch();
   const isEditMode = !!editRequestId;
   const { selectedTeam, teams } = useTeam();
   const { user } = useAuth();
   const isAdmin = user?.is_admin ?? false;
+  
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedPurchaseType, setSelectedPurchaseType] = useState<string | null>(null);
   const [formTemplate, setFormTemplate] = useState<FormTemplateResponse | null>(null);
+  const [effectiveTemplate, setEffectiveTemplate] = useState<EffectiveTemplateResponse | null>(null);
   const [purchaseRequest, setPurchaseRequest] = useState<PurchaseRequest | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
   const [purchaseTypes, setPurchaseTypes] = useState<Lookup[]>([]);
+  const [availablePurchaseTypes, setAvailablePurchaseTypes] = useState<Lookup[]>([]); // Filtered by team configs
+  const [teamPurchaseConfigs, setTeamPurchaseConfigs] = useState<any[]>([]); // TeamPurchaseConfig[]
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [isLoadingRequest, setIsLoadingRequest] = useState(false);
+  const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [highlightRequiredAttachments, setHighlightRequiredAttachments] = useState(false);
   const [requiredCategoryNames, setRequiredCategoryNames] = useState<string[]>([]);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [workflowExpanded, setWorkflowExpanded] = useState(true);
   const attachmentsSectionRef = useRef<HTMLDivElement>(null);
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [submitComment, setSubmitComment] = useState('');
+  const [submitFiles, setSubmitFiles] = useState<File[]>([]);
+
+  // Determine if team and purchase type can be changed
+  // In edit mode, these can only be changed if the request status is editable
+  const canChangeTeamAndPurchaseType = !isEditMode || (purchaseRequest && isEditableStatus(purchaseRequest.status.code));
+  
+  // Get selected purchase type title for display
+  // Use availablePurchaseTypes if team is selected, otherwise use all purchaseTypes
+  const purchaseTypesForDisplay = selectedTeamId ? availablePurchaseTypes : purchaseTypes;
+  const selectedPurchaseTypeTitle = purchaseTypesForDisplay.find(p => p.code === selectedPurchaseType)?.title || selectedPurchaseType;
 
   const {
     register,
@@ -91,15 +118,11 @@ function NewPurchaseRequestPage() {
     mode: 'onChange',
   });
 
-  // Load purchase types
+  // Load purchase types using dedicated API function
   useEffect(() => {
     const loadPurchaseTypes = async () => {
       try {
-        const lookups = await lookupApi.getLookups();
-        logger.debug('All lookups loaded:', lookups.length);
-        const purchaseTypeLookups = lookups.filter(
-          (lookup) => lookup.type === 'PURCHASE_TYPE' && lookup.is_active
-        );
+        const purchaseTypeLookups = await prsApi.fetchPurchaseTypes();
         logger.debug('PURCHASE_TYPE lookups found:', purchaseTypeLookups.length, purchaseTypeLookups);
         setPurchaseTypes(purchaseTypeLookups);
         if (purchaseTypeLookups.length === 0) {
@@ -107,6 +130,11 @@ function NewPurchaseRequestPage() {
         }
       } catch (err) {
         logger.error('Error loading purchase types:', err);
+        toast({
+          title: 'خطا',
+          description: 'خطا در بارگذاری انواع خرید. لطفا صفحه را بازنشانی کنید.',
+          variant: 'destructive',
+        });
       }
     };
     loadPurchaseTypes();
@@ -124,10 +152,45 @@ function NewPurchaseRequestPage() {
         const existingRequest = await prsApi.getPurchaseRequest(editRequestId);
         setPurchaseRequest(existingRequest);
         setSelectedTeamId(existingRequest.team.id);
+        setSelectedPurchaseType(existingRequest.purchase_type.code);
 
-        // Load form template
-        const template = await prsApi.getTeamFormTemplate(existingRequest.team.id);
-        setFormTemplate(template);
+        // Try to load effective template, fall back to legacy form template
+        try {
+          const effective = await prsApi.getEffectiveTemplate(
+            existingRequest.team.id,
+            existingRequest.purchase_type.code
+          );
+          setEffectiveTemplate(effective);
+          
+          const compatibleTemplate: FormTemplateResponse = {
+            team: effective.team,
+            template: {
+              id: effective.form_template.id,
+              team: effective.team.id,
+              version_number: effective.form_template.version_number,
+              is_active: true,
+              created_by: null,
+              fields: effective.form_template.fields,
+              created_at: '',
+              updated_at: '',
+            },
+          };
+          setFormTemplate(compatibleTemplate);
+        } catch (templateErr: any) {
+          // Fall back to loading the form template the request was created with
+          // 404 is expected when effective template endpoint doesn't exist - silently handle
+          const isExpected404 = templateErr?.response?.status === 404;
+          if (!isExpected404) {
+            logger.warn('Error loading effective template in edit mode, using fallback:', templateErr);
+          }
+          try {
+            const template = await prsApi.getTeamFormTemplate(existingRequest.team.id);
+            setFormTemplate(template);
+          } catch (fallbackErr: any) {
+            logger.error('Error loading fallback template in edit mode:', fallbackErr);
+            // Don't show error toast here - let the form render with what we have
+          }
+        }
 
         // Pre-populate top-level fields
         reset({
@@ -142,21 +205,23 @@ function NewPurchaseRequestPage() {
         const initialValues = extractInitialValuesFromFieldValues(existingRequest.field_values);
         
         // Merge with default values for fields that don't have values yet
-        template.template.fields.forEach((field) => {
-          if (!(field.id in initialValues) && field.default_value !== null && field.default_value !== undefined) {
-            // Convert default_value based on field type
-            switch (field.field_type) {
-              case 'NUMBER':
-                initialValues[field.id] = parseFloat(field.default_value);
-                break;
-              case 'BOOLEAN':
-                initialValues[field.id] = field.default_value === 'true' || field.default_value === '1';
-                break;
-              default:
-                initialValues[field.id] = field.default_value;
+        if (formTemplate?.template?.fields) {
+          formTemplate.template.fields.forEach((field) => {
+            if (!(field.id in initialValues) && field.default_value !== null && field.default_value !== undefined) {
+              // Convert default_value based on field type
+              switch (field.field_type) {
+                case 'NUMBER':
+                  initialValues[field.id] = parseFloat(field.default_value);
+                  break;
+                case 'BOOLEAN':
+                  initialValues[field.id] = field.default_value === 'true' || field.default_value === '1';
+                  break;
+                default:
+                  initialValues[field.id] = field.default_value;
+              }
             }
-          }
-        });
+          });
+        }
         
         setFieldValues(initialValues);
       } catch (err: any) {
@@ -175,37 +240,150 @@ function NewPurchaseRequestPage() {
     loadExistingRequest();
   }, [editRequestId, reset]);
 
+  // Load team purchase configs when team is selected to filter available purchase types
+  useEffect(() => {
+    const loadTeamConfigs = async () => {
+      if (!selectedTeamId) {
+        setAvailablePurchaseTypes([]);
+        setTeamPurchaseConfigs([]);
+        return;
+      }
+
+      try {
+        setIsLoadingConfigs(true);
+        const configs = await prsApi.getTeamPurchaseConfigs(selectedTeamId);
+        setTeamPurchaseConfigs(configs);
+
+        // Extract purchase type codes from configs
+        const availablePurchaseTypeCodes = new Set(
+          configs
+            .filter(config => config.is_active)
+            .map(config => config.purchase_type.code)
+        );
+
+        // Filter purchase types to only show those with configurations
+        const filtered = purchaseTypes.filter(p => availablePurchaseTypeCodes.has(p.code));
+        setAvailablePurchaseTypes(filtered);
+
+        logger.debug('Available purchase types for team:', {
+          teamId: selectedTeamId,
+          configs: configs.length,
+          availableTypes: filtered.map(p => p.code),
+        });
+
+        // If current purchase type is not in available list, reset it
+        if (selectedPurchaseType && !availablePurchaseTypeCodes.has(selectedPurchaseType)) {
+          setSelectedPurchaseType(null);
+          setFormTemplate(null);
+          setEffectiveTemplate(null);
+        }
+      } catch (err: any) {
+        logger.error('Error loading team purchase configs:', err);
+        // On error, show all purchase types (fallback behavior)
+        setAvailablePurchaseTypes(purchaseTypes);
+        setTeamPurchaseConfigs([]);
+      } finally {
+        setIsLoadingConfigs(false);
+      }
+    };
+
+    loadTeamConfigs();
+  }, [selectedTeamId, purchaseTypes]);
+
   // Handle team selection (called from context-based auto selection above)
-  const handleTeamSelect = useCallback(async (teamId: string) => {
+  const handleTeamSelect = useCallback((teamId: string) => {
     setSelectedTeamId(teamId);
+    setSelectedPurchaseType(null); // Reset purchase type when team changes
     setFormTemplate(null);
+    setEffectiveTemplate(null);
     setPurchaseRequest(null);
     setFieldValues({});
     setFieldErrors({});
+    setTemplateError(null);
     setHighlightRequiredAttachments(false);
     setRequiredCategoryNames([]);
+  }, []);
 
+  // Load effective template when both team and purchase type are selected
+  const loadEffectiveTemplate = useCallback(async (teamId: string, purchaseTypeCode: string) => {
     try {
-      setIsLoading(true);
-      // Load form template
-      const template = await prsApi.getTeamFormTemplate(teamId);
-      setFormTemplate(template);
-
-      // Initialize field values from default values using utility function
-      const initialValues = buildInitialValuesFromFields(template.template.fields);
+      setIsLoadingTemplate(true);
+      setFormTemplate(null);
+      setEffectiveTemplate(null);
+      setFieldValues({});
+      setTemplateError(null);
+      
+      // Try to load effective template (team + purchase type -> form template + workflow template)
+      const effective = await prsApi.getEffectiveTemplate(teamId, purchaseTypeCode);
+      setEffectiveTemplate(effective);
+      
+      // Build form template response structure from effective template for compatibility
+      const compatibleTemplate: FormTemplateResponse = {
+        team: effective.team,
+        template: {
+          id: effective.form_template.id,
+          team: effective.team.id,
+          version_number: effective.form_template.version_number,
+          is_active: true,
+          created_by: null,
+          fields: effective.form_template.fields,
+          created_at: '',
+          updated_at: '',
+        },
+      };
+      setFormTemplate(compatibleTemplate);
+      
+      // Initialize field values from default values
+      const initialValues = buildInitialValuesFromFields(effective.form_template.fields);
       setFieldValues(initialValues);
-    } catch (err: any) {
-      const errorMessage = extractErrorMessage(err);
-      toast({
-        title: 'خطا در بارگذاری فرم',
-        description: errorMessage,
-        variant: 'destructive',
+      
+      logger.debug('Loaded effective template:', {
+        formTemplate: effective.form_template.name,
+        workflowTemplate: effective.workflow_template.name,
+        steps: effective.workflow_template.steps.length,
       });
-      logger.error('Error loading form template:', err);
+    } catch (err: any) {
+      // Fall back to legacy behavior if no effective template is configured
+      // 404 is expected when effective template endpoint doesn't exist - don't log as error
+      const isExpected404 = err?.response?.status === 404;
+      if (!isExpected404) {
+        logger.warn('No effective template found, falling back to legacy form template:', err);
+      }
+      
+      try {
+        const template = await prsApi.getTeamFormTemplate(teamId);
+        setFormTemplate(template);
+        setEffectiveTemplate(null); // Clear effective template on fallback
+        
+        // Initialize field values from default values using utility function
+        const initialValues = buildInitialValuesFromFields(template.template.fields);
+        setFieldValues(initialValues);
+      } catch (fallbackErr: any) {
+        // Both effective template and legacy template failed - show clear error
+        const errorMessage = 'برای این تیم و این نوع خرید، فرم و جریان تأیید تعریف نشده است. لطفاً با ادمین تماس بگیرید.';
+        setTemplateError(errorMessage);
+        toast({
+          title: 'خطا در بارگذاری فرم',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        logger.error('Error loading form template:', fallbackErr);
+      }
     } finally {
-      setIsLoading(false);
+      setIsLoadingTemplate(false);
     }
   }, []);
+
+  // Handle purchase type selection
+  const handlePurchaseTypeSelect = useCallback((purchaseTypeCode: string) => {
+    setSelectedPurchaseType(purchaseTypeCode);
+    setValue('purchase_type', purchaseTypeCode);
+    
+    // If team is already selected, load the effective template
+    if (selectedTeamId) {
+      loadEffectiveTemplate(selectedTeamId, purchaseTypeCode);
+    }
+  }, [selectedTeamId, loadEffectiveTemplate, setValue]);
 
   // For new requests (not edit mode), automatically use the globally selected team
   useEffect(() => {
@@ -226,6 +404,13 @@ function NewPurchaseRequestPage() {
       handleTeamSelect(selectedTeam.id);
     }
   }, [isEditMode, isAdmin, selectedTeam, selectedTeamId, teams, handleTeamSelect]);
+
+  // Load effective template when purchase type changes (and team is already selected)
+  useEffect(() => {
+    if (!isEditMode && selectedTeamId && selectedPurchaseType) {
+      loadEffectiveTemplate(selectedTeamId, selectedPurchaseType);
+    }
+  }, [isEditMode, selectedTeamId, selectedPurchaseType, loadEffectiveTemplate]);
 
   // Handle field value changes
   const handleFieldChange = useCallback((fieldId: string, value: any) => {
@@ -335,7 +520,7 @@ function NewPurchaseRequestPage() {
     return isValid;
   }, [formTemplate, fieldValues]);
 
-  // Submit request
+  // Submit request - opens modal first
   const onSubmit: SubmitHandler<TopLevelFormData> = async (data) => {
     // Require an existing draft before submitting
     if (!purchaseRequest) {
@@ -357,10 +542,9 @@ function NewPurchaseRequestPage() {
       return;
     }
 
+    // Save latest changes first
     try {
-      setIsSubmitting(true);
-
-      // Save latest changes first
+      setIsSaving(true);
       const fieldValuesData = convertFieldValuesToApiFormat();
       await prsApi.updatePurchaseRequest(purchaseRequest.id, {
         vendor_name: data.vendor_name,
@@ -370,10 +554,38 @@ function NewPurchaseRequestPage() {
         purchase_type: data.purchase_type,
         field_values: fieldValuesData,
       });
+      setIsSaving(false);
+    } catch (err: any) {
+      setIsSaving(false);
+      const errorMessage = extractErrorMessage(err);
+      toast({
+        title: 'خطا در ذخیره',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      return;
+    }
 
-      // Submit request (or resubmit in edit mode)
-      const submitted = await prsApi.submitPurchaseRequest(purchaseRequest.id);
+    // Open submit modal
+    setSubmitModalOpen(true);
+  };
+
+  // Actually submit the request with comment and files
+  const handleSubmitConfirm = async () => {
+    if (!purchaseRequest) return;
+
+    try {
+      setIsSubmitting(true);
+
+      // Submit request (or resubmit in edit mode) with comment and files
+      const submitted = await prsApi.submitPurchaseRequest(purchaseRequest.id, {
+        comment: submitComment || undefined,
+        files: submitFiles.length > 0 ? submitFiles : undefined,
+      });
       setPurchaseRequest(submitted);
+      setSubmitModalOpen(false);
+      setSubmitComment('');
+      setSubmitFiles([]);
 
       toast({
         title: 'موفق',
@@ -459,7 +671,88 @@ function NewPurchaseRequestPage() {
           </Box>
         )}
 
-        {(isLoading || isLoadingRequest) && (selectedTeamId || isEditMode) && (
+        {/* For admins: Show team selector (always visible when no form is loaded) */}
+        {isAdmin && !isEditMode && !formTemplate && !isLoadingTemplate && !templateError && (
+          <Box sx={{ textAlign: 'center', py: selectedTeamId && !selectedPurchaseType ? 4 : 8 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              {selectedTeamId ? 'تیم انتخاب شده' : 'لطفا تیم را انتخاب کنید'}
+            </Typography>
+            <Box sx={{ maxWidth: 400, mx: 'auto' }}>
+              <Select
+                fullWidth
+                height={48}
+                label="تیم"
+                value={selectedTeamId || ''}
+                onChange={(e) => handleTeamSelect(e.target.value as string)}
+                size="small"
+                displayEmpty
+              >
+                <MenuItem value="" disabled>
+                  <em style={{ fontStyle: 'normal', color: defaultColors.neutral.light }}>تیم را انتخاب کنید</em>
+                </MenuItem>
+                {teams.filter(team => team.is_active).map((team) => (
+                  <MenuItem key={team.id} value={team.id}>
+                    {team.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+          </Box>
+        )}
+
+        {/* Prompt to select purchase type if team is selected but purchase type is not */}
+        {selectedTeamId && !selectedPurchaseType && !isEditMode && !formTemplate && !isLoadingTemplate && !templateError && (
+          <Box sx={{ textAlign: 'center', py: isAdmin ? 4 : 8 }}>
+            {isLoadingConfigs ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <CircularProgress />
+                <Typography variant="body1" color="text.secondary">
+                  در حال بارگذاری فرم‌های در دسترس...
+                </Typography>
+              </Box>
+            ) : availablePurchaseTypes.length === 0 ? (
+              <Box>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                  برای این تیم هیچ فرمی پیکربندی نشده است. لطفاً با مدیر سیستم تماس بگیرید.
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                  لطفا نوع خرید را انتخاب کنید تا فرم مربوطه بارگذاری شود.
+                </Typography>
+                <Box sx={{ maxWidth: 400, mx: 'auto', mt: 3 }}>
+                  <Select
+                    fullWidth
+                    height={48}
+                    label="نوع خرید"
+                    value=""
+                    onChange={(e) => handlePurchaseTypeSelect(e.target.value)}
+                    size="small"
+                  >
+                    {availablePurchaseTypes.map((type) => (
+                      <MenuItem key={type.id} value={type.code}>
+                        {type.title}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+              </>
+            )}
+          </Box>
+        )}
+
+        {/* Template Error Banner */}
+        {templateError && !isLoadingTemplate && (
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="error" icon={<AlertCircle size={24} />}>
+              <AlertTitle>خطا در بارگذاری فرم</AlertTitle>
+              {templateError}
+            </Alert>
+          </Box>
+        )}
+
+        {(isLoading || isLoadingRequest || isLoadingTemplate) && (selectedTeamId || isEditMode) && (
           <Box sx={{ mt: 4 }}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Skeleton className="h-12 w-full" />
@@ -473,7 +766,7 @@ function NewPurchaseRequestPage() {
           </Box>
         )}
 
-        {formTemplate && !isLoading && !isLoadingRequest && (selectedTeamId || isEditMode) && (
+        {formTemplate && !isLoading && !isLoadingRequest && !isLoadingTemplate && !templateError && (selectedTeamId || isEditMode) && (
           <form onSubmit={handleSubmit(onSubmit)}>
             {/* Top-level fields */}
             <Box sx={{ mb: 4 }}>
@@ -482,22 +775,36 @@ function NewPurchaseRequestPage() {
               </Typography>
 
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {/* Admins can choose team per request */}
+                {/* Team selector - Admin can choose team per request, locked in non-editable edit mode */}
                 {isAdmin && (
-                  <Select
-                    fullWidth
-                    height={48}
-                    label="تیم"
-                    value={selectedTeamId || ''}
-                    onChange={(e) => handleTeamSelect(e.target.value as string)}
-                    size="small"
-                  >
-                    {teams.map((team) => (
-                      <MenuItem key={team.id} value={team.id}>
-                        {team.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
+                  canChangeTeamAndPurchaseType ? (
+                    <Select
+                      fullWidth
+                      height={48}
+                      label="تیم"
+                      value={selectedTeamId || ''}
+                      onChange={(e) => handleTeamSelect(e.target.value as string)}
+                      size="small"
+                    >
+                      {teams.map((team) => (
+                        <MenuItem key={team.id} value={team.id}>
+                          {team.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="body2" color="text.secondary">تیم:</Typography>
+                      <Chip 
+                        label={purchaseRequest?.team.name || ''} 
+                        size="medium"
+                        sx={{ bgcolor: defaultColors.neutral[100], fontWeight: 600 }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        (قابل تغییر نیست)
+                      </Typography>
+                    </Box>
+                  )
                 )}
 
                 <TextField
@@ -541,26 +848,65 @@ function NewPurchaseRequestPage() {
                   required
                 />
 
-                <Select
-                  fullWidth
-                  height={48}
-                  label="نوع خرید"
-                  value={watch('purchase_type') || ''}
-                  onChange={(e) => setValue('purchase_type', e.target.value)}
-                  error={!!errors.purchase_type}
-                  required
-                  size="small"
-                >
-                  {purchaseTypes.map((type) => (
-                    <MenuItem key={type.id} value={type.code}>
-                      {type.title}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.purchase_type && (
-                  <Typography variant="body2" color="error" sx={{ mt: -1 }}>
-                    {errors.purchase_type.message}
-                  </Typography>
+                {/* Purchase type selector - locked in non-editable edit mode */}
+                {canChangeTeamAndPurchaseType ? (
+                  <>
+                    <Select
+                      fullWidth
+                      height={48}
+                      label="نوع خرید"
+                      value={selectedPurchaseType || watch('purchase_type') || ''}
+                      onChange={(e) => handlePurchaseTypeSelect(e.target.value)}
+                      error={!!errors.purchase_type}
+                      required
+                      size="small"
+                      disabled={!selectedTeamId || isLoadingConfigs}
+                    >
+                      {purchaseTypesForDisplay.map((type) => (
+                        <MenuItem key={type.id} value={type.code}>
+                          {type.title}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {selectedTeamId && availablePurchaseTypes.length === 0 && !isLoadingConfigs && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+                        برای این تیم هیچ فرمی پیکربندی نشده است.
+                      </Typography>
+                    )}
+                    {errors.purchase_type && (
+                      <Typography variant="body2" color="error" sx={{ mt: -1 }}>
+                        {errors.purchase_type.message}
+                      </Typography>
+                    )}
+                  </>
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="body2" color="text.secondary">نوع خرید:</Typography>
+                    <Chip 
+                      label={purchaseRequest?.purchase_type.title || selectedPurchaseTypeTitle || ''} 
+                      size="medium"
+                      sx={{ 
+                        bgcolor: purchaseRequest?.purchase_type.code === 'GOODS' 
+                          ? (theme.palette.primary?.light || '#D4F7E8')
+                          : (theme.palette.secondary?.light || '#E5E7EA'),
+                        color: purchaseRequest?.purchase_type.code === 'GOODS'
+                          ? (theme.palette.primary?.dark || '#054F5B')
+                          : (theme.palette.secondary?.dark || '#3A3E46'),
+                        fontWeight: 600,
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      (قابل تغییر نیست)
+                    </Typography>
+                  </Box>
+                )}
+                {isLoadingTemplate && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2" color="text.secondary">
+                      در حال بارگذاری فرم...
+                    </Typography>
+                  </Box>
                 )}
               </Box>
             </Box>
@@ -582,6 +928,82 @@ function NewPurchaseRequestPage() {
                 }}
               />
             </Box>
+
+            {/* Workflow Preview Section */}
+            {effectiveTemplate && effectiveTemplate.workflow_template.steps.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    mb: 2,
+                  }}
+                  onClick={() => setWorkflowExpanded(!workflowExpanded)}
+                >
+                  <Typography variant="h1" fontWeight={700} color="text.primary">
+                    زنجیره تأیید
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {effectiveTemplate.workflow_template.steps.length} مرحله
+                    </Typography>
+                    {workflowExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </Box>
+                </Box>
+                <Collapse in={workflowExpanded}>
+                  <Box
+                    sx={{
+                      bgcolor: defaultColors.neutral[50],
+                      borderRadius: 2,
+                      p: 3,
+                      border: `1px solid ${defaultColors.neutral[200]}`,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                      {effectiveTemplate.workflow_template.steps
+                        .sort((a, b) => a.order - b.order)
+                        .map((step, index) => (
+                          <Box key={step.order} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Chip
+                              label={step.name}
+                              size="medium"
+                              icon={step.is_finance_review ? <CheckCircle2 size={16} /> : undefined}
+                              sx={{
+                                bgcolor: step.is_finance_review 
+                                  ? (theme.palette.success?.light || '#E8F5E9')
+                                  : (theme.palette.primary?.light || '#D4F7E8'),
+                                color: step.is_finance_review 
+                                  ? (theme.palette.success?.dark || '#1B5E20')
+                                  : (theme.palette.primary?.dark || '#054F5B'),
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
+                                '& .MuiChip-icon': {
+                                  color: step.is_finance_review 
+                                    ? (theme.palette.success?.dark || '#1B5E20')
+                                    : (theme.palette.primary?.dark || '#054F5B'),
+                                },
+                              }}
+                            />
+                            {index < effectiveTemplate.workflow_template.steps.length - 1 && (
+                              <Typography variant="body2" color="text.secondary" sx={{ mx: 0.5 }}>
+                                ←
+                              </Typography>
+                            )}
+                          </Box>
+                        ))}
+                    </Box>
+                    {effectiveTemplate.workflow_template.steps.some(s => s.is_finance_review) && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                        <CheckCircle2 size={14} style={{ display: 'inline', marginLeft: 4, verticalAlign: 'middle' }} />
+                        مرحله بررسی مالی
+                      </Typography>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            )}
 
             {/* Attachments section */}
             <Box ref={attachmentsSectionRef} sx={{ mb: 4 }}>
@@ -636,6 +1058,142 @@ function NewPurchaseRequestPage() {
           </form>
         )}
       </Box>
+
+      {/* Submit Confirmation Modal */}
+      <Modal
+        open={submitModalOpen}
+        onClose={() => {
+          if (!isSubmitting) {
+            setSubmitModalOpen(false);
+            setSubmitComment('');
+            setSubmitFiles([]);
+          }
+        }}
+        width={500}
+      >
+        <Box sx={{ p: 4, position: 'relative' }}>
+          <IconButton
+            onClick={() => {
+              if (!isSubmitting) {
+                setSubmitModalOpen(false);
+                setSubmitComment('');
+                setSubmitFiles([]);
+              }
+            }}
+            disabled={isSubmitting}
+            sx={{
+              position: 'absolute',
+              left: 16,
+              top: 16,
+              width: 40,
+              height: 40,
+            }}
+            aria-label="بستن"
+          >
+            <X className="w-5 h-5" />
+          </IconButton>
+          <Typography variant="h2" fontWeight={700} sx={{ mb: 3 }}>
+            {isEditMode ? 'ارسال مجدد درخواست' : 'ارسال درخواست'}
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            آیا از ارسال این درخواست اطمینان دارید؟
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="توضیحات (اختیاری)"
+            value={submitComment}
+            onChange={(e) => setSubmitComment(e.target.value)}
+            sx={{ mb: 2 }}
+            disabled={isSubmitting}
+          />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              فایل‌های پیوست (اختیاری)
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setSubmitFiles((prev) => [...prev, ...files]);
+              }}
+              disabled={isSubmitting}
+              style={{ display: 'none' }}
+              id="submit-file-input"
+            />
+            <label htmlFor="submit-file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload className="w-4 h-4" />}
+                disabled={isSubmitting}
+                sx={{ mb: 1 }}
+              >
+                انتخاب فایل
+              </Button>
+            </label>
+            {submitFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {submitFiles.map((file, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2">{file.name}</Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setSubmitFiles((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                      disabled={isSubmitting}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              buttonSize="M"
+              onClick={() => {
+                setSubmitModalOpen(false);
+                setSubmitComment('');
+                setSubmitFiles([]);
+              }}
+              disabled={isSubmitting}
+            >
+              انصراف
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              buttonSize="M"
+              onClick={handleSubmitConfirm}
+              disabled={isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={16} /> : <CheckCircle2 className="w-5 h-5" />}
+            >
+              {isSubmitting 
+                ? (isEditMode ? 'در حال ارسال مجدد...' : 'در حال ارسال...') 
+                : (isEditMode ? 'ارسال مجدد' : 'ارسال')}
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
     </>
   );
 }

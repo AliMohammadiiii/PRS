@@ -60,22 +60,21 @@ class TestTeamBasics:
 class TestFormTemplateConstraints:
     """B2: FormTemplate constraints"""
     
-    def test_one_active_template_per_team(self, team_with_workflow):
-        """Test that only one active template per team is allowed"""
+    def test_multiple_active_templates_per_team_allowed(self, team_with_workflow, user_manager):
+        """Test that multiple active templates per team are now allowed (for multi-template support)"""
         team = team_with_workflow["team"]
         template = team_with_workflow["template"]
         
-        # Try to create another active template for same team
-        new_template = FormTemplate(
+        # Create another active template for same team - this should now be allowed
+        new_template = FormTemplate.objects.create(
             team=team,
             version_number=2,
-            is_active=True
+            is_active=True,
+            created_by=user_manager
         )
         
-        with pytest.raises(ValidationError) as exc_info:
-            new_template.full_clean()
-        
-        assert "already has an active form template" in str(exc_info.value)
+        # Both should be active
+        assert FormTemplate.objects.filter(team=team, is_active=True).count() == 2
     
     def test_multiple_inactive_templates_allowed(self, team_with_workflow, user_manager):
         """Test that multiple inactive templates are allowed"""
@@ -288,26 +287,29 @@ class TestWorkflowConstraints:
 @pytest.mark.django_db
 @pytest.mark.P0
 class TestWorkflowStepApproverConstraints:
-    """B5: WorkflowStepApprover constraints"""
+    """B5: WorkflowStepApprover constraints - now role-based"""
     
-    def test_unique_step_approver(self, team_with_workflow, user_manager):
-        """Test that (step, approver) must be unique"""
+    def test_unique_step_role(self, team_with_workflow, company_role_lookups):
+        """Test that (step, role) must be unique"""
         step1 = team_with_workflow["step1"]
+        manager_role = company_role_lookups['MANAGER']
         
-        # Try to add same user twice as approver
+        # The step already has a MANAGER role assigned from fixture
+        # Try to add same role again - should fail
         with pytest.raises(IntegrityError):
             WorkflowStepApprover.objects.create(
                 step=step1,
-                approver=user_manager,
+                role=manager_role,
                 is_active=True
             )
     
-    def test_inactive_approvers_ignored(self, team_with_workflow, user_manager):
+    def test_inactive_approvers_ignored(self, team_with_workflow, company_role_lookups):
         """Test that inactive approvers are ignored by permission helpers"""
         step1 = team_with_workflow["step1"]
+        manager_role = company_role_lookups['MANAGER']
         
-        # Get existing approver
-        approver = WorkflowStepApprover.objects.get(step=step1, approver=user_manager)
+        # Get existing approver by role
+        approver = WorkflowStepApprover.objects.get(step=step1, role=manager_role)
         
         # Deactivate approver
         approver.is_active = False

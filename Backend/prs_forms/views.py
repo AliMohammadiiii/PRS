@@ -19,7 +19,6 @@ from prs_forms.serializers import (
     FormFieldUpdateSerializer
 )
 from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
-from teams.models import Team
 from purchase_requests.models import PurchaseRequest
 
 
@@ -45,15 +44,15 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             return FormTemplateSerializer
     
     def get_queryset(self):
-        """Filter form templates by team and permissions"""
-        qs = super().get_queryset().select_related('team', 'created_by').prefetch_related(
+        """Filter form templates by permissions"""
+        qs = super().get_queryset().select_related('created_by').prefetch_related(
             Prefetch('fields', queryset=FormField.objects.order_by('order'))
         )
         
-        # Filter by team if provided
-        team_id = self.request.query_params.get('team_id')
-        if team_id:
-            qs = qs.filter(team_id=team_id)
+        # Filter by name if provided
+        name = self.request.query_params.get('name')
+        if name:
+            qs = qs.filter(name=name)
         
         # Filter by is_active if provided
         is_active = self.request.query_params.get('is_active')
@@ -67,7 +66,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         if not (self.request.user.is_superuser or self.request.user.is_staff):
             qs = qs.filter(is_active=True)
         
-        return qs.order_by('team', '-version_number')
+        return qs.order_by('name', '-version_number')
     
     def get_permissions(self):
         """
@@ -98,7 +97,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     
     @extend_schema(
         summary="Create a new form template version",
-        description="Creates a new form template for a team. If a template already exists and has active requests, "
+        description="Creates a new form template. If a template with the same name already exists and has active requests, "
                     "creates a new version instead of modifying the existing one.",
         request=FormTemplateCreateSerializer,
         responses={
@@ -112,10 +111,10 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
-        team = serializer.validated_data['team']
+        name = serializer.validated_data['name']
         
-        # Check if team already has an active template
-        existing_active = FormTemplate.objects.filter(team=team, is_active=True).first()
+        # Check if template with this name already exists
+        existing_active = FormTemplate.objects.filter(name=name, is_active=True).first()
         
         if existing_active:
             # Check if existing template has active requests
@@ -133,14 +132,14 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
                 existing_active.save()
                 
                 # Get next version number
-                max_version = FormTemplate.objects.filter(team=team).aggregate(
+                max_version = FormTemplate.objects.filter(name=name).aggregate(
                     max_ver=Max('version_number')
                 )['max_ver'] or 0
                 version_number = max_version + 1
             else:
                 # No active requests - can update existing template or create new version
                 # For now, create new version
-                max_version = FormTemplate.objects.filter(team=team).aggregate(
+                max_version = FormTemplate.objects.filter(name=name).aggregate(
                     max_ver=Max('version_number')
                 )['max_ver'] or 0
                 version_number = max_version + 1
@@ -149,7 +148,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         
         # Create new template
         form_template = FormTemplate.objects.create(
-            team=team,
+            name=name,
             version_number=version_number,
             created_by=request.user,
             is_active=True
@@ -197,13 +196,13 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             instance.save()
             
             # Create new version
-            max_version = FormTemplate.objects.filter(team=instance.team).aggregate(
+            max_version = FormTemplate.objects.filter(name=instance.name).aggregate(
                 max_ver=Max('version_number')
             )['max_ver'] or 0
             version_number = max_version + 1
             
             new_template = FormTemplate.objects.create(
-                team=instance.team,
+                name=instance.name,
                 version_number=version_number,
                 created_by=request.user,
                 is_active=True

@@ -6,7 +6,10 @@ from rest_framework.exceptions import ValidationError, NotFound, PermissionDenie
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
 from django.db.models import Prefetch, Q
-from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
+from workflows.models import (
+    Workflow, WorkflowStep, WorkflowStepApprover,
+    WorkflowTemplate, WorkflowTemplateStep, WorkflowTemplateStepApprover
+)
 from workflows.serializers import (
     WorkflowSerializer,
     WorkflowCreateSerializer,
@@ -15,7 +18,14 @@ from workflows.serializers import (
     WorkflowStepSerializer,
     WorkflowStepCreateSerializer,
     WorkflowStepUpdateSerializer,
-    WorkflowStepApproverSerializer
+    WorkflowStepApproverSerializer,
+    WorkflowTemplateSerializer,
+    WorkflowTemplateListSerializer,
+    WorkflowTemplateDetailSerializer,
+    WorkflowTemplateCreateSerializer,
+    WorkflowTemplateUpdateSerializer,
+    WorkflowTemplateStepSerializer,
+    WorkflowTemplateStepApproverSerializer
 )
 from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
 from teams.models import Team
@@ -388,5 +398,77 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         
         # If no requests, allow deletion
         return super().destroy(request, *args, **kwargs)
+
+
+# =============================================================================
+# WORKFLOW TEMPLATE VIEWSET
+# =============================================================================
+
+class WorkflowTemplateViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing workflow templates.
+    
+    System Admins and Workflow Admins can create, update, and manage workflow templates.
+    Templates are team-agnostic and can be assigned to teams via TeamPurchaseConfig.
+    """
+    queryset = WorkflowTemplate.objects.all()
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on action"""
+        if self.action == 'create':
+            return WorkflowTemplateCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return WorkflowTemplateUpdateSerializer
+        elif self.action in ['retrieve', 'list']:
+            return WorkflowTemplateDetailSerializer
+        else:
+            return WorkflowTemplateSerializer
+    
+    def get_queryset(self):
+        """Filter workflow templates by permissions"""
+        qs = super().get_queryset().prefetch_related(
+            Prefetch(
+                'steps',
+                queryset=WorkflowTemplateStep.objects.filter(is_active=True).order_by('step_order').prefetch_related(
+                    Prefetch(
+                        'approvers',
+                        queryset=WorkflowTemplateStepApprover.objects.filter(is_active=True).select_related('role')
+                    )
+                )
+            )
+        )
+        
+        # Filter by name if provided
+        name = self.request.query_params.get('name')
+        if name:
+            qs = qs.filter(name=name)
+        
+        # Filter by is_active if provided
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            if is_active.lower() in ('true', '1', 'yes'):
+                qs = qs.filter(is_active=True)
+            elif is_active.lower() in ('false', '0', 'no'):
+                qs = qs.filter(is_active=False)
+        
+        # Non-admins only see active templates
+        if not (self.request.user.is_superuser or self.request.user.is_staff):
+            qs = qs.filter(is_active=True)
+        
+        return qs.order_by('name', '-version_number')
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        Read operations: any authenticated user
+        Write operations: System Admin or Workflow Admin
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated]
+        else:
+            # Create, update, delete require admin permissions
+            permission_classes = [IsSystemAdmin | IsWorkflowAdmin]
+        return [permission() for permission in permission_classes]
 
 

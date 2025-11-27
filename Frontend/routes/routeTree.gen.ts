@@ -32,6 +32,7 @@ import { Route as dashboardDashboardLayoutPrsRequestsNewIndexRouteImport } from 
 import { Route as dashboardDashboardLayoutPrsRequestsRequestIdIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/requests/$requestId/index'
 import { Route as dashboardDashboardLayoutPrsAdminWorkflowsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/workflows/index'
 import { Route as dashboardDashboardLayoutPrsAdminTeamsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/teams/index'
+import { Route as dashboardDashboardLayoutPrsAdminTeamConfigsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/team-configs/index'
 import { Route as dashboardDashboardLayoutPrsAdminFormTemplatesIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/admin/form-templates/index'
 
 const LoginRoute = LoginRouteImport.update({
@@ -171,6 +172,12 @@ const dashboardDashboardLayoutPrsAdminTeamsIndexRoute =
     path: '/prs/admin/teams/',
     getParentRoute: () => dashboardDashboardLayoutRoute,
   } as any)
+const dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute =
+  dashboardDashboardLayoutPrsAdminTeamConfigsIndexRouteImport.update({
+    id: '/prs/admin/team-configs/',
+    path: '/prs/admin/team-configs/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
 const dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute =
   dashboardDashboardLayoutPrsAdminFormTemplatesIndexRouteImport.update({
     id: '/prs/admin/form-templates/',
@@ -197,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/prs/my-requests': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/reports/submit': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
   '/prs/admin/form-templates': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/prs/admin/team-configs': typeof dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute
   '/prs/admin/teams': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
   '/prs/admin/workflows': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
   '/prs/requests/$requestId': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
   '/prs/my-requests': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/reports/submit': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
   '/prs/admin/form-templates': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/prs/admin/team-configs': typeof dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute
   '/prs/admin/teams': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
   '/prs/admin/workflows': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
   '/prs/requests/$requestId': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
@@ -249,6 +258,7 @@ export interface FileRoutesById {
   '/(dashboard)/_dashboardLayout/prs/my-requests/': typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   '/(dashboard)/_dashboardLayout/reports/submit/': typeof dashboardDashboardLayoutReportsSubmitIndexRoute
   '/(dashboard)/_dashboardLayout/prs/admin/form-templates/': typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  '/(dashboard)/_dashboardLayout/prs/admin/team-configs/': typeof dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute
   '/(dashboard)/_dashboardLayout/prs/admin/teams/': typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
   '/(dashboard)/_dashboardLayout/prs/admin/workflows/': typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
   '/(dashboard)/_dashboardLayout/prs/requests/$requestId/': typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/prs/my-requests'
     | '/reports/submit'
     | '/prs/admin/form-templates'
+    | '/prs/admin/team-configs'
     | '/prs/admin/teams'
     | '/prs/admin/workflows'
     | '/prs/requests/$requestId'
@@ -301,6 +312,7 @@ export interface FileRouteTypes {
     | '/prs/my-requests'
     | '/reports/submit'
     | '/prs/admin/form-templates'
+    | '/prs/admin/team-configs'
     | '/prs/admin/teams'
     | '/prs/admin/workflows'
     | '/prs/requests/$requestId'
@@ -327,6 +339,7 @@ export interface FileRouteTypes {
     | '/(dashboard)/_dashboardLayout/prs/my-requests/'
     | '/(dashboard)/_dashboardLayout/reports/submit/'
     | '/(dashboard)/_dashboardLayout/prs/admin/form-templates/'
+    | '/(dashboard)/_dashboardLayout/prs/admin/team-configs/'
     | '/(dashboard)/_dashboardLayout/prs/admin/teams/'
     | '/(dashboard)/_dashboardLayout/prs/admin/workflows/'
     | '/(dashboard)/_dashboardLayout/prs/requests/$requestId/'
@@ -503,6 +516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof dashboardDashboardLayoutPrsAdminTeamsIndexRouteImport
       parentRoute: typeof dashboardDashboardLayoutRoute
     }
+    '/(dashboard)/_dashboardLayout/prs/admin/team-configs/': {
+      id: '/(dashboard)/_dashboardLayout/prs/admin/team-configs/'
+      path: '/prs/admin/team-configs'
+      fullPath: '/prs/admin/team-configs'
+      preLoaderRoute: typeof dashboardDashboardLayoutPrsAdminTeamConfigsIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
     '/(dashboard)/_dashboardLayout/prs/admin/form-templates/': {
       id: '/(dashboard)/_dashboardLayout/prs/admin/form-templates/'
       path: '/prs/admin/form-templates'
@@ -530,6 +550,7 @@ interface dashboardDashboardLayoutRouteChildren {
   dashboardDashboardLayoutPrsMyRequestsIndexRoute: typeof dashboardDashboardLayoutPrsMyRequestsIndexRoute
   dashboardDashboardLayoutReportsSubmitIndexRoute: typeof dashboardDashboardLayoutReportsSubmitIndexRoute
   dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute: typeof dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute
+  dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute: typeof dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute
   dashboardDashboardLayoutPrsAdminTeamsIndexRoute: typeof dashboardDashboardLayoutPrsAdminTeamsIndexRoute
   dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute: typeof dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute
   dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute: typeof dashboardDashboardLayoutPrsRequestsRequestIdIndexRoute
@@ -571,6 +592,8 @@ const dashboardDashboardLayoutRouteChildren: dashboardDashboardLayoutRouteChildr
       dashboardDashboardLayoutReportsSubmitIndexRoute,
     dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute:
       dashboardDashboardLayoutPrsAdminFormTemplatesIndexRoute,
+    dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute:
+      dashboardDashboardLayoutPrsAdminTeamConfigsIndexRoute,
     dashboardDashboardLayoutPrsAdminTeamsIndexRoute:
       dashboardDashboardLayoutPrsAdminTeamsIndexRoute,
     dashboardDashboardLayoutPrsAdminWorkflowsIndexRoute:

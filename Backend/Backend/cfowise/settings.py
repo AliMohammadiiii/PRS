@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "purchase_requests.apps.PurchaseRequestsConfig",
     "attachments.apps.AttachmentsConfig",
     "approvals.apps.ApprovalsConfig",
+    "prs_team_config.apps.PrsTeamConfigConfig",
 ]
 
 MIDDLEWARE = [

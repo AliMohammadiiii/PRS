@@ -3,7 +3,6 @@ export type Config = {
   appName: string;
   appVersion: string;
   appLang: 'fa-IR' | 'en-US';
-  token: string;
 };
 
 export type Environment = 'LOCAL' | 'DEV' | 'STAGE' | 'PROD';
@@ -14,39 +13,50 @@ const environment: Environment = import.meta.env.PROD
   ? 'PROD' 
   : ((import.meta.env.PUBLIC_ENVIRONMENT as Environment) || 'LOCAL');
 
-const token =
-  'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJXeEp4Q1JrTkd5a3hmbkFZdWtTTXR2IiwiYXVkIjpbImluamFzdCJdLCJleHAiOjE3NDkzNzUzMDQsInVpZCI6IjE2ODg4MGE4LWFlOTctNDhmNy1iMWIzLTYxMmNiMWIyZTQyZSIsInJsZSI6ImFkbWluIiwibWJjIjoiOTgiLCJtYm4iOiI5MTI1Nzk5NDU1IiwicmZzIjpmYWxzZX0._nHZo4_xB0sgfahAINZucyKfQnZfFYeJdWvsNkZ4Lw5VdYAV6HmAIQe8lsfyEeaBYoUtGfZW-waVmUFdQz9pDA';
+// Get API base URL from environment variable, with fallbacks
+const getApiBaseUrl = (env: Environment): string => {
+  // Check for explicit API URL in environment
+  const envApiUrl = import.meta.env.PUBLIC_API_BASE_URL;
+  if (envApiUrl) {
+    return envApiUrl;
+  }
+  
+  // Production uses relative URL
+  if (env === 'PROD') {
+    return '/PRS';
+  }
+  
+  // Development environments use environment variable or default
+  const defaultDevUrl = import.meta.env.PUBLIC_DEV_API_URL || 'http://localhost:8000';
+  return defaultDevUrl;
+};
 
 const configs: Record<Environment, Config> = {
   LOCAL: {
-    apiBaseUrl: 'http://localhost:8000',
-    appName: 'MyApp (Local)',
+    apiBaseUrl: getApiBaseUrl('LOCAL'),
+    appName: 'PRS (Local)',
     appVersion: '0.0.1-local',
     appLang: 'fa-IR',
-    token,
   },
   DEV: {
-    apiBaseUrl: 'http://localhost:8000',
-    appName: 'MyApp (Dev)',
+    apiBaseUrl: getApiBaseUrl('DEV'),
+    appName: 'PRS (Dev)',
     appVersion: '0.0.1-dev',
     appLang: 'fa-IR',
-    token,
   },
   STAGE: {
-    apiBaseUrl: 'http://localhost:8000',
-    appName: 'MyApp (Stage)',
+    apiBaseUrl: getApiBaseUrl('STAGE'),
+    appName: 'PRS (Stage)',
     appVersion: '0.0.1-stage',
     appLang: 'fa-IR',
-    token,
   },
   PROD: {
     // PRS is deployed under https://innovation.nntc.io/PRS/
     // Endpoints already include /api prefix
-    apiBaseUrl: '/PRS',
+    apiBaseUrl: getApiBaseUrl('PROD'),
     appName: 'PRS',
     appVersion: '1.0.0',
     appLang: 'fa-IR',
-    token,
   },
 };
 

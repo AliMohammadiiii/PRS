@@ -65,11 +65,12 @@ const DataGridPagination: FC<DataGridePaginationProps> = ({
       >
         <Typography variant="label1">تعداد در صفحه</Typography>
         <Select
-          value={limit}
+          value={limit ?? LIMIT[0]}
           size="small"
           onChange={(e) => {
-            updateSearchParams({ limit: e.target.value as number });
-            if (onLimitChange) onLimitChange(e.target.value as number);
+            const newLimit = Number(e.target.value);
+            updateSearchParams({ limit: newLimit });
+            if (onLimitChange) onLimitChange(newLimit);
           }}
         >
           {LIMIT.map((el) => (

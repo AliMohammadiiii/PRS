@@ -8,8 +8,12 @@ from rest_framework.test import APIClient
 from classifications.models import LookupType, Lookup
 from teams.models import Team
 from prs_forms.models import FormTemplate, FormField
-from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
+from workflows.models import (
+    Workflow, WorkflowStep, WorkflowStepApprover,
+    WorkflowTemplate, WorkflowTemplateStep, WorkflowTemplateStepApprover
+)
 from attachments.models import AttachmentCategory
+from accounts.models import AccessScope
 
 User = get_user_model()
 
@@ -125,13 +129,42 @@ def purchase_type_lookups(db):
 
 
 @pytest.fixture
-def team_with_workflow(db, user_manager, user_finance, request_status_lookups, purchase_type_lookups):
+def company_role_lookups(db):
+    """Create COMPANY_ROLE lookup type and common roles"""
+    type_obj, _ = LookupType.objects.get_or_create(
+        code="COMPANY_ROLE",
+        defaults={"title": "Company Role", "description": "Roles in a company"}
+    )
+    
+    roles = {
+        "MANAGER": "Manager",
+        "FINANCE": "Finance",
+        "DIRECTOR": "Director",
+    }
+    
+    lookups = {}
+    for code, name in roles.items():
+        lookup, _ = Lookup.objects.get_or_create(
+            type=type_obj,
+            code=code,
+            defaults={
+                "title": name,
+                "is_active": True
+            }
+        )
+        lookups[code] = lookup
+    
+    return lookups
+
+
+@pytest.fixture
+def team_with_workflow(db, user_manager, user_finance, request_status_lookups, purchase_type_lookups, company_role_lookups):
     """
     Create a complete team setup with:
     - Team
     - Active FormTemplate with fields
     - Workflow with steps
-    - Approvers assigned
+    - Approvers assigned (via roles and AccessScope)
     - Required attachment category
     """
     # Create team
@@ -233,9 +266,23 @@ def team_with_workflow(db, user_manager, user_finance, request_status_lookups, p
         is_active=True
     )
     
-    # Assign approvers
-    WorkflowStepApprover.objects.create(step=step1, approver=user_manager, is_active=True)
-    WorkflowStepApprover.objects.create(step=finance_step, approver=user_finance, is_active=True)
+    # Assign approver roles to workflow steps
+    WorkflowStepApprover.objects.create(step=step1, role=company_role_lookups['MANAGER'], is_active=True)
+    WorkflowStepApprover.objects.create(step=finance_step, role=company_role_lookups['FINANCE'], is_active=True)
+    
+    # Create AccessScope to link users to roles for this team
+    AccessScope.objects.create(
+        user=user_manager,
+        team=team,
+        role=company_role_lookups['MANAGER'],
+        is_active=True,
+    )
+    AccessScope.objects.create(
+        user=user_finance,
+        team=team,
+        role=company_role_lookups['FINANCE'],
+        is_active=True,
+    )
     
     # Create required attachment category
     invoice_cat = AttachmentCategory.objects.create(

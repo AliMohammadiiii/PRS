@@ -141,10 +141,12 @@ const UsersSection: FC<UsersSectionProps> = ({ roles, teams }) => {
             if (assignment.teamId && assignment.roleId) {
               const role = roles.find((r) => r.id === assignment.roleId);
               if (role) {
-                // Check if scope already exists for this team
-                const existingScope = userScopes.find((s) => s.team === assignment.teamId);
+                // Check if scope already exists for this team AND role (unique constraint is on user, team, role)
+                const existingScope = userScopes.find(
+                  (s) => s.team === assignment.teamId && s.role === assignment.roleId
+                );
                 if (existingScope) {
-                  // Update existing scope
+                  // Update existing scope (reactivate if needed)
                   await accessScopeApi.updateAccessScope(existingScope.id, {
                     team: assignment.teamId,
                     role: assignment.roleId,
@@ -187,18 +189,37 @@ const UsersSection: FC<UsersSectionProps> = ({ roles, teams }) => {
         // Check if creating new user or access scope for existing user
         if (userData.userType === 'existing' && userData.id) {
           // Create access scopes for existing user
+          // First, get all existing scopes for this user to check for duplicates
+          const allScopes = await accessScopeApi.getAccessScopes();
+          const userScopes = allScopes.filter((s) => s.user === userData.id);
+          
           const assignments = userData.assignments || [];
           for (const assignment of assignments) {
             if (assignment.teamId && assignment.roleId) {
               const role = roles.find((r) => r.id === assignment.roleId);
               if (role) {
-                await accessScopeApi.createAccessScope({
-                  user: userData.id,
-                  team: assignment.teamId,
-                  role: assignment.roleId,
-                  position_title: role.title,
-                  is_active: assignment.isActive !== false,
-                });
+                // Check if scope already exists for this team AND role (unique constraint is on user, team, role)
+                const existingScope = userScopes.find(
+                  (s) => s.team === assignment.teamId && s.role === assignment.roleId
+                );
+                if (existingScope) {
+                  // Update existing scope (reactivate if needed)
+                  await accessScopeApi.updateAccessScope(existingScope.id, {
+                    team: assignment.teamId,
+                    role: assignment.roleId,
+                    position_title: role.title,
+                    is_active: assignment.isActive !== false,
+                  });
+                } else {
+                  // Create new scope
+                  await accessScopeApi.createAccessScope({
+                    user: userData.id,
+                    team: assignment.teamId,
+                    role: assignment.roleId,
+                    position_title: role.title,
+                    is_active: assignment.isActive !== false,
+                  });
+                }
               }
             }
           }

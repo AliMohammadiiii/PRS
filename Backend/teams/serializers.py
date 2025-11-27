@@ -48,3 +48,11 @@ class TeamUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f'A team with name "{value}" already exists.')
         return value.strip()
 
+
+class TeamMinimalSerializer(serializers.ModelSerializer):
+    """Minimal serializer for team data (used in nested responses)"""
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'is_active']
+        read_only_fields = ['id', 'name', 'is_active']
+

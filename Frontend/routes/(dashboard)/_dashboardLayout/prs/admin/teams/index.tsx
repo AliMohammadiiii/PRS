@@ -300,17 +300,23 @@ function TeamsAdminPage() {
           <DataGrid
             rows={rows}
             columns={columns}
+            getRowHeight={() => 'auto'}
             pageSizeOptions={[10, 25, 50, 100]}
             initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
             slots={{ pagination: DataGridPagination }}
             disableRowSelectionOnClick
             sx={{
               border: 'none',
+              '& .MuiDataGrid-row': {
+                minHeight: '56px !important',
+              },
               '& .MuiDataGrid-cell:focus': { outline: 'none' },
               '& .MuiDataGrid-cell': {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                whiteSpace: 'normal',
+                wordWrap: 'break-word',
               },
               '& .MuiDataGrid-columnHeaders': {
                 '& .MuiDataGrid-columnHeader': {

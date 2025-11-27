@@ -229,6 +229,7 @@ export function AdminReviewGroupsTable({ data, onViewGroup, onStatusChange }: Ad
           rows={paginatedRows}
           columns={tableColumns}
           loading={false}
+          getRowHeight={() => 'auto'}
           slots={{
             loadingOverlay: DataGridLoading,
             noRowsOverlay: EmptyState,
@@ -250,6 +251,8 @@ export function AdminReviewGroupsTable({ data, onViewGroup, onStatusChange }: Ad
               alignItems: 'center',
               fontSize: '14px',
               borderBottom: '1px solid #e5e7ea',
+              whiteSpace: 'normal',
+              wordWrap: 'break-word',
             },
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f4f6fa',
@@ -260,6 +263,7 @@ export function AdminReviewGroupsTable({ data, onViewGroup, onStatusChange }: Ad
               fontSize: '14px',
             },
             '& .MuiDataGrid-row': {
+              minHeight: '56px !important',
               '&:nth-of-type(even)': {
                 backgroundColor: '#fafbfc',
               },

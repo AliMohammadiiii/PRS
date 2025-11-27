@@ -49,6 +49,32 @@ export interface LookupUpdateRequest {
   is_active?: boolean;
 }
 
+// =============================================================================
+// PURCHASE TYPE SUPPORT
+// =============================================================================
+
+/**
+ * Purchase type code union type.
+ * GOODS and SERVICE are the primary types, but others may exist in the system.
+ * Use string union to allow dynamic types from backend.
+ */
+export type PurchaseTypeCode = 'GOODS' | 'SERVICE' | string;
+
+/**
+ * Purchase type lookup item (extends Lookup with code typed as PurchaseTypeCode)
+ */
+export interface PurchaseTypeLookup extends Omit<Lookup, 'code' | 'type'> {
+  type: 'PURCHASE_TYPE';
+  code: PurchaseTypeCode;
+}
+
+/**
+ * Type guard to check if a Lookup is a PurchaseTypeLookup
+ */
+export function isPurchaseTypeLookup(lookup: Lookup): lookup is PurchaseTypeLookup {
+  return lookup.type === 'PURCHASE_TYPE';
+}
+
 
 
 

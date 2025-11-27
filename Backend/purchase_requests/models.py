@@ -17,10 +17,28 @@ class PurchaseRequest(BaseModel):
     requestor = models.ForeignKey('accounts.User', on_delete=models.PROTECT, related_name='purchase_requests')
     team = models.ForeignKey('teams.Team', on_delete=models.PROTECT, related_name='purchase_requests')
     form_template = models.ForeignKey('prs_forms.FormTemplate', on_delete=models.PROTECT, related_name='purchase_requests', help_text='Form template version used when this request was created')
+    workflow_template = models.ForeignKey(
+        'workflows.WorkflowTemplate',
+        on_delete=models.PROTECT,
+        related_name='purchase_requests',
+        null=True,
+        blank=True,
+        help_text='Workflow template used for this request. Nullable for legacy requests.'
+    )
     
     # Status management
     status = models.ForeignKey('classifications.Lookup', on_delete=models.PROTECT, related_name='purchase_requests', limit_choices_to={'type__code': 'REQUEST_STATUS'})
+    # Note: current_step points to WorkflowTemplateStep for new requests, or legacy WorkflowStep for old requests
     current_step = models.ForeignKey('workflows.WorkflowStep', on_delete=models.SET_NULL, null=True, blank=True, related_name='current_requests')
+    # New field for template-based workflow steps
+    current_template_step = models.ForeignKey(
+        'workflows.WorkflowTemplateStep',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_requests',
+        help_text='Current step in the workflow template (for new requests)'
+    )
     
     # Vendor information
     vendor_name = models.CharField(max_length=255)
@@ -110,9 +128,7 @@ class PurchaseRequest(BaseModel):
         # Team must be active
         if self.team and not self.team.is_active:
             raise ValidationError('Team must be active.')
-        # Form template must belong to the team
-        if self.form_template and self.team and self.form_template.team != self.team:
-            raise ValidationError('Form template must belong to the selected team.')
+        # Templates are team-agnostic - no need to validate team matching
         # Lookup type guards
         if self.status and getattr(getattr(self.status, 'type', None), 'code', None) != 'REQUEST_STATUS':
             raise ValidationError('status must reference REQUEST_STATUS lookups.')

@@ -265,26 +265,28 @@ export default function Login() {
                 </Typography>
               </Button>
 
-          {/* Terms and Conditions (static text only; no navigation wired yet) */}
-          <Typography
-            sx={{
-              fontSize: 12,
-              lineHeight: "20px",
-              color: defaultColors.neutral.light,
-              textAlign: "center",
-              width: "100%",
-            }}
-          >
-            <span>با ورود یعنی </span>
-            <span
-              style={{
-                color: PRIMARY_COLOR,
-              }}
-            >
-              قوانین و مقررات
-            </span>
-            <span> رو قبول می‌کنی.</span>
-          </Typography>
+              {/* Terms and Conditions (static text only; no navigation wired yet) */}
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  lineHeight: "20px",
+                  color: defaultColors.neutral.light,
+                  textAlign: "center",
+                  width: "100%",
+                }}
+              >
+                <span>با ورود یعنی </span>
+                <span
+                  style={{
+                    color: PRIMARY_COLOR,
+                  }}
+                >
+                  قوانین و مقررات
+                </span>
+                <span> رو قبول می‌کنی.</span>
+              </Typography>
+            </Box>
+          </Box>
         </Box>
       </Box>
     </Box>

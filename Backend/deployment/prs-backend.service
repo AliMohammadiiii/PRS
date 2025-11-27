@@ -5,7 +5,8 @@ Requires=postgresql.service
 
 [Service]
 Type=notify
-# TODO: create this user/group on the server or adjust as needed
+# The 'prs' user and group are created by the setup-ubuntu-prs.sh script
+# If deploying manually, create with: sudo adduser --disabled-password --gecos "" prs
 User=prs
 Group=prs
 WorkingDirectory=/opt/prs/Backend
@@ -48,6 +49,7 @@ SyslogIdentifier=prs-backend
 
 [Install]
 WantedBy=multi-user.target
+
 
 
 

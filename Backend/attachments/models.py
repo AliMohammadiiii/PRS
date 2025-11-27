@@ -39,17 +39,26 @@ class Attachment(BaseModel):
     File attachment for a purchase request in Purchase Request System.
     
     Files are stored with versioning - new versions are added without removing old ones.
-    Allowed file types: PDF, JPG, JPEG, PNG, DOCX
+    Allowed file types: PDF, JPG, JPEG, PNG, DOCX, XLSX, XLS
     Maximum file size: 10 MB per file
     Used to satisfy FILE_UPLOAD form fields and team-defined attachment categories.
+    Can also be linked to approval history entries (for attachments added during submit/approve/reject/complete actions).
     """
     request = models.ForeignKey('purchase_requests.PurchaseRequest', on_delete=models.CASCADE, related_name='attachments')
     category = models.ForeignKey(AttachmentCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='attachments')
+    approval_history = models.ForeignKey(
+        'approvals.ApprovalHistory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='attachments',
+        help_text='Optional link to approval history entry if attachment was added during submit/approve/reject/complete action'
+    )
     
     # File information
     filename = models.CharField(max_length=255, help_text='Original filename')
     file_path = models.FileField(upload_to='request_attachments/', validators=[
-        FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'docx']),
+        FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'docx', 'xlsx', 'xls']),
     ])
     file_size = models.PositiveIntegerField(help_text='File size in bytes')
     file_type = models.CharField(max_length=32, help_text='MIME type or file extension')
@@ -62,6 +71,7 @@ class Attachment(BaseModel):
         indexes = [
             models.Index(fields=['request', 'category']),
             models.Index(fields=['request', 'upload_date']),
+            models.Index(fields=['approval_history']),
         ]
         ordering = ['request', '-upload_date']
 

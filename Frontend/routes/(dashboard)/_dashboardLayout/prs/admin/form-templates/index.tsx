@@ -18,9 +18,10 @@ import {
   Chip,
   Checkbox,
 } from '@mui/material';
-import { SearchNormal1, Add, Edit, Delete, ArrowUp, ArrowDown } from 'iconsax-react';
+import { SearchNormal1, Add, ArrowUp, ArrowDown } from 'iconsax-react';
+import { Edit2, Trash2 } from 'lucide-react';
 import PageHeader from '../../../../components/PageHeader';
-import { Team, FormField, FormTemplate } from 'src/types/api/prs';
+import { FormField, FormTemplate } from 'src/types/api/prs';
 import * as prsApi from 'src/services/api/prs';
 import * as lookupApi from 'src/services/api/lookups';
 import { Lookup } from 'src/types/api/lookups';
@@ -36,11 +37,12 @@ const FORM_FIELD_TYPES: FormField['field_type'][] = ['TEXT', 'NUMBER', 'DATE', '
 
 function FormTemplatesAdminPage() {
   const navigate = useNavigate();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
-  const [template, setTemplate] = useState<FormTemplate | null>(null);
+  const [templates, setTemplates] = useState<FormTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createTemplateDialogOpen, setCreateTemplateDialogOpen] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
   const [fieldDialogOpen, setFieldDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<FormField | null>(null);
   const [fieldFormData, setFieldFormData] = useState({
@@ -55,78 +57,89 @@ function FormTemplatesAdminPage() {
     dropdown_options: [] as string[],
   });
 
-  const loadTeams = useCallback(async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await prsApi.getTeams();
-      setTeams(data.filter(t => t.is_active));
-      if (data.length > 0 && !selectedTeam) {
-        setSelectedTeam(data[0].id);
+      // Load all form templates globally (no team filter)
+      const data = await prsApi.getAllFormTemplates();
+      // Ensure data is an array
+      if (!Array.isArray(data)) {
+        logger.error('getAllFormTemplates did not return an array:', data);
+        setTemplates([]);
+        setSelectedTemplate(null);
+        return;
+      }
+      // Ensure all templates have fields array initialized
+      const templatesWithFields = data.map(t => ({
+        ...t,
+        fields: t.fields || [],
+      }));
+      setTemplates(templatesWithFields);
+      // Auto-select first template if available
+      if (templatesWithFields.length > 0 && !selectedTemplate) {
+        setSelectedTemplate(templatesWithFields[0]);
+      } else if (templatesWithFields.length === 0) {
+        setSelectedTemplate(null);
       }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
-        title: 'خطا در بارگذاری تیم‌ها',
+        title: 'خطا در بارگذاری قالب‌های فرم',
         description: errorMessage,
         variant: 'destructive',
       });
-      logger.error('Error loading teams:', err);
+      logger.error('Error loading templates:', err);
+      setTemplates([]);
+      setSelectedTemplate(null);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedTeam]);
+  }, [selectedTemplate]);
 
-  const loadTemplate = useCallback(async () => {
-    if (!selectedTeam) {
-      setTemplate(null);
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  const handleCreateTemplate = async () => {
+    if (!newTemplateName.trim()) {
+      toast({
+        title: 'خطا',
+        description: 'نام قالب الزامی است',
+        variant: 'destructive',
+      });
       return;
     }
 
     try {
-      setIsLoading(true);
-      const response = await prsApi.getTeamFormTemplate(selectedTeam);
-      setTemplate(response.template);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setTemplate(null);
-      } else {
-        const errorMessage = extractErrorMessage(err);
-        toast({
-          title: 'خطا در بارگذاری قالب فرم',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-        logger.error('Error loading template:', err);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedTeam]);
-
-  useEffect(() => {
-    loadTeams();
-  }, [loadTeams]);
-
-  useEffect(() => {
-    if (selectedTeam) {
-      loadTemplate();
-    }
-  }, [selectedTeam, loadTemplate]);
-
-  const handleCreateTemplate = async () => {
-    if (!selectedTeam) return;
-
-    try {
       setIsSubmitting(true);
-      await prsApi.createFormTemplate({
-        team: selectedTeam,
+      // Create template without team dependency
+      // Note: Backend may still require team field - we may need to pass empty string or null
+      const created = await prsApi.createFormTemplate({
+        team: '', // Backend may accept empty string or null for team-independent templates
+        name: newTemplateName.trim(),
         fields: [],
       });
       toast({
         title: 'موفق',
         description: 'قالب فرم با موفقیت ایجاد شد',
       });
-      await loadTemplate();
+      setCreateTemplateDialogOpen(false);
+      setNewTemplateName('');
+      await loadTemplates();
+      // Select the newly created template
+      const updated = await prsApi.getAllFormTemplates();
+      if (!Array.isArray(updated)) {
+        logger.error('getAllFormTemplates did not return an array:', updated);
+        return;
+      }
+      const updatedWithFields = updated.map(t => ({
+        ...t,
+        fields: t.fields || [],
+      }));
+      const newTemplate = updatedWithFields.find(t => t.id === created.id) || updatedWithFields[updatedWithFields.length - 1];
+      if (newTemplate) {
+        setSelectedTemplate(newTemplate);
+      }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -141,10 +154,11 @@ function FormTemplatesAdminPage() {
   };
 
   const handleAddField = () => {
-    if (!template) return;
+    if (!selectedTemplate) return;
     
-    const nextOrder = template.fields.length > 0 
-      ? Math.max(...template.fields.map(f => f.order)) + 1 
+    const fields = selectedTemplate.fields || [];
+    const nextOrder = fields.length > 0 
+      ? Math.max(...fields.map(f => f.order)) + 1 
       : 1;
     
     setFieldFormData({
@@ -179,7 +193,7 @@ function FormTemplatesAdminPage() {
   };
 
   const handleSaveField = async () => {
-    if (!template || !fieldFormData.field_id || !fieldFormData.name || !fieldFormData.label) {
+    if (!selectedTemplate || !fieldFormData.field_id || !fieldFormData.name || !fieldFormData.label) {
       toast({
         title: 'خطا',
         description: 'فیلدهای الزامی را پر کنید',
@@ -200,8 +214,9 @@ function FormTemplatesAdminPage() {
     try {
       setIsSubmitting(true);
       
+      const templateFields = selectedTemplate.fields || [];
       const fields = editingField
-        ? template.fields.map(f => 
+        ? templateFields.map(f => 
             f.id === editingField.id
               ? {
                   field_id: fieldFormData.field_id,
@@ -229,7 +244,7 @@ function FormTemplatesAdminPage() {
                 }
           )
         : [
-            ...template.fields.map(f => ({
+            ...templateFields.map(f => ({
               field_id: f.field_id,
               name: f.name,
               label: f.label,
@@ -255,8 +270,8 @@ function FormTemplatesAdminPage() {
             },
           ];
 
-      await prsApi.updateFormTemplate(template.id, {
-        team: typeof template.team === 'string' ? template.team : template.team.id,
+      await prsApi.updateFormTemplate(selectedTemplate.id, {
+        team: typeof selectedTemplate.team === 'string' ? selectedTemplate.team : (selectedTemplate.team?.id || ''),
         fields,
       });
 
@@ -265,7 +280,21 @@ function FormTemplatesAdminPage() {
         description: editingField ? 'فیلد با موفقیت به‌روزرسانی شد' : 'فیلد با موفقیت اضافه شد',
       });
       setFieldDialogOpen(false);
-      await loadTemplate();
+      await loadTemplates();
+      // Reload selected template
+      const updated = await prsApi.getAllFormTemplates();
+      if (!Array.isArray(updated)) {
+        logger.error('getAllFormTemplates did not return an array:', updated);
+        return;
+      }
+      const updatedWithFields = updated.map(t => ({
+        ...t,
+        fields: t.fields || [],
+      }));
+      const reloaded = updatedWithFields.find(t => t.id === selectedTemplate.id);
+      if (reloaded) {
+        setSelectedTemplate(reloaded);
+      }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -280,9 +309,10 @@ function FormTemplatesAdminPage() {
   };
 
   const handleMoveField = async (fieldId: string, direction: 'up' | 'down') => {
-    if (!template) return;
+    if (!selectedTemplate) return;
 
-    const sortedFields = [...template.fields].sort((a, b) => a.order - b.order);
+    const templateFields = selectedTemplate.fields || [];
+    const sortedFields = [...templateFields].sort((a, b) => a.order - b.order);
     const index = sortedFields.findIndex(f => f.id === fieldId);
     
     if (
@@ -301,8 +331,22 @@ function FormTemplatesAdminPage() {
         field_id: f.id,
         order: i + 1,
       }));
-      await prsApi.reorderFormFields(template.id, fieldOrders);
-      await loadTemplate();
+      await prsApi.reorderFormFields(selectedTemplate.id, fieldOrders);
+      await loadTemplates();
+      // Reload selected template
+      const updated = await prsApi.getAllFormTemplates();
+      if (!Array.isArray(updated)) {
+        logger.error('getAllFormTemplates did not return an array:', updated);
+        return;
+      }
+      const updatedWithFields = updated.map(t => ({
+        ...t,
+        fields: t.fields || [],
+      }));
+      const reloaded = updatedWithFields.find(t => t.id === selectedTemplate.id);
+      if (reloaded) {
+        setSelectedTemplate(reloaded);
+      }
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -316,35 +360,31 @@ function FormTemplatesAdminPage() {
     }
   };
 
-  const sortedFields = template ? [...template.fields].sort((a, b) => a.order - b.order) : [];
+  const sortedFields = selectedTemplate && selectedTemplate.fields 
+    ? [...selectedTemplate.fields].sort((a, b) => a.order - b.order) 
+    : [];
 
   return (
     <>
-      <PageHeader title="مدیریت قالب‌های فرم" breadcrumb={['مدیریت', 'قالب‌های فرم']} />
-
-      {/* Team Selector */}
-      <Box sx={{ mb: 3 }}>
-        <FormControl fullWidth>
-          <InputLabel>تیم</InputLabel>
-          <Select
-            value={selectedTeam || ''}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            label="تیم"
-          >
-            {teams.map((team) => (
-              <MenuItem key={team.id} value={team.id}>
-                {team.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+      <PageHeader title="مدیریت قالب‌های فرم" breadcrumb={['مدیریت', 'قالب‌های فرم']}>
+        <Button
+          variant="contained"
+          startIcon={<Add size={20} />}
+          onClick={() => {
+            setNewTemplateName('');
+            setCreateTemplateDialogOpen(true);
+          }}
+          disabled={isSubmitting}
+        >
+          قالب جدید
+        </Button>
+      </PageHeader>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      ) : !template ? (
+      ) : templates.length === 0 ? (
         <Box
           sx={{
             bgcolor: 'white',
@@ -354,39 +394,58 @@ function FormTemplatesAdminPage() {
           }}
         >
           <Typography variant="h6" sx={{ mb: 2 }}>
-            این تیم هنوز قالب فرم ندارد
+            هنوز قالب فرمی ایجاد نشده است
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add size={20} />}
-            onClick={handleCreateTemplate}
-            disabled={isSubmitting || !selectedTeam}
-          >
-            ایجاد قالب فرم
-          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            برای شروع، یک قالب فرم جدید ایجاد کنید
+          </Typography>
         </Box>
       ) : (
         <>
-          {/* Template Info */}
-          <Box
-            sx={{
-              bgcolor: 'white',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-            }}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">
-                قالب فرم - نسخه {template.version_number}
-              </Typography>
-              <Chip
-                label={template.is_active ? 'فعال' : 'غیرفعال'}
-                color={template.is_active ? 'success' : 'default'}
-                size="small"
-              />
-            </Box>
+          {/* Template Selector */}
+          <Box sx={{ mb: 3 }}>
+            <FormControl fullWidth>
+              <InputLabel>قالب فرم</InputLabel>
+              <Select
+                value={selectedTemplate?.id || ''}
+                onChange={(e) => {
+                  const template = templates.find(t => t.id === e.target.value);
+                  setSelectedTemplate(template || null);
+                }}
+                label="قالب فرم"
+              >
+                {templates.map((template) => (
+                  <MenuItem key={template.id} value={template.id}>
+                    {template.name || `قالب ${template.version_number}`} (v{template.version_number})
+                    {template.is_active && ' ✓'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
+
+          {selectedTemplate && (
+            <>
+              {/* Template Info */}
+              <Box
+                sx={{
+                  bgcolor: 'white',
+                  borderRadius: 2,
+                  p: 3,
+                  mb: 3,
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h6">
+                    {selectedTemplate.name || `قالب فرم`} - نسخه {selectedTemplate.version_number}
+                  </Typography>
+                  <Chip
+                    label={selectedTemplate.is_active ? 'فعال' : 'غیرفعال'}
+                    color={selectedTemplate.is_active ? 'success' : 'default'}
+                    size="small"
+                  />
+                </Box>
+              </Box>
 
           {/* Fields List */}
           <Box
@@ -443,21 +502,58 @@ function FormTemplatesAdminPage() {
                         size="small"
                         onClick={() => handleMoveField(field.id, 'up')}
                         disabled={index === 0}
+                        color="primary"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1,
+                        }}
                       >
-                        <ArrowUp size={20} />
+                        <ArrowUp size={20} variant="Bold" />
                       </IconButton>
                       <IconButton
                         size="small"
                         onClick={() => handleMoveField(field.id, 'down')}
                         disabled={index === sortedFields.length - 1}
+                        color="primary"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1,
+                        }}
                       >
-                        <ArrowDown size={20} />
+                        <ArrowDown size={20} variant="Bold" />
                       </IconButton>
                       <IconButton
                         size="small"
                         onClick={() => handleEditField(field)}
+                        color="warning"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1,
+                        }}
+                        aria-label="ویرایش"
                       >
-                        <Edit size={20} />
+                        <Edit2 size={20} className="w-5 h-5" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          // TODO: Implement delete field functionality
+                          if (window.confirm('آیا از حذف این فیلد اطمینان دارید؟')) {
+                            // handleDeleteField(field.id);
+                          }
+                        }}
+                        color="error"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 1,
+                        }}
+                        aria-label="حذف"
+                      >
+                        <Trash2 size={20} className="w-5 h-5" />
                       </IconButton>
                     </Box>
                   </Box>
@@ -465,8 +561,34 @@ function FormTemplatesAdminPage() {
               </Box>
             )}
           </Box>
+            </>
+          )}
         </>
       )}
+
+      {/* Create Template Dialog */}
+      <Dialog open={createTemplateDialogOpen} onClose={() => setCreateTemplateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>ایجاد قالب فرم جدید</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="نام قالب *"
+            value={newTemplateName}
+            onChange={(e) => setNewTemplateName(e.target.value)}
+            sx={{ mt: 2 }}
+            required
+            placeholder="مثال: قالب خرید کالا"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateTemplateDialogOpen(false)} disabled={isSubmitting}>
+            انصراف
+          </Button>
+          <Button onClick={handleCreateTemplate} variant="contained" disabled={isSubmitting}>
+            ایجاد
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Field Dialog */}
       <Dialog open={fieldDialogOpen} onClose={() => setFieldDialogOpen(false)} maxWidth="md" fullWidth>

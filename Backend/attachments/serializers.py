@@ -54,7 +54,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
     def validate_file(self, value):
         """Validate file type and size"""
         # Check file extension (case-insensitive)
-        allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx']
+        allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx', 'xlsx', 'xls']
         file_extension = value.name.split('.')[-1].lower() if '.' in value.name else ''
         
         if file_extension not in allowed_extensions:
@@ -115,6 +115,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
                 'jpeg': 'image/jpeg',
                 'png': 'image/png',
                 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'xls': 'application/vnd.ms-excel',
             }
             file_type = mime_types.get(extension, extension)
         

@@ -76,20 +76,45 @@ def me_view(request):
             )
         )
         
-        # Check if user is assigned as an approver in any workflow step
-        # This allows users to have APPROVER role without explicit AccessScope
+        # Check if user's roles match any workflow step approver roles
+        # Workflow approvers are role-based, not user-based
+        # If user has a role that is assigned as an approver in any active workflow step,
+        # they should have APPROVER role
         try:
-            from workflows.models import WorkflowStepApprover  # type: ignore
-            has_approver_assignment = WorkflowStepApprover.objects.filter(
-                approver=user,
-                is_active=True,
-                step__is_active=True
-            ).exists()
+            from workflows.models import (
+                WorkflowTemplateStepApprover,
+                WorkflowStepApprover
+            )  # type: ignore
             
-            if has_approver_assignment and 'APPROVER' not in roles:
-                roles.append('APPROVER')
+            # Get user's role IDs from active access scopes
+            user_role_ids = [
+                scope.role.id
+                for scope in all_active_scopes
+                if scope.role and scope.role.id
+            ]
+            
+            if user_role_ids:
+                # Check new template-based workflows
+                has_template_approver_role = WorkflowTemplateStepApprover.objects.filter(
+                    role_id__in=user_role_ids,
+                    is_active=True,
+                    step__is_active=True,
+                    step__workflow_template__is_active=True
+                ).exists()
+                
+                # Check legacy workflows
+                has_legacy_approver_role = WorkflowStepApprover.objects.filter(
+                    role_id__in=user_role_ids,
+                    is_active=True,
+                    step__is_active=True,
+                    step__workflow__is_active=True
+                ).exists()
+                
+                if (has_template_approver_role or has_legacy_approver_role) and 'APPROVER' not in roles:
+                    roles.append('APPROVER')
         except Exception:
             # If workflows app is not available, skip this check
+            logger.exception("Error checking workflow approver roles")
             pass
 
         # Company-level access is optional; we keep previous behaviour but it is

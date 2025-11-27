@@ -206,6 +206,13 @@ const adminMenuConfig: MenuEntry[] = [
     disabled: false,
   },
   {
+    key: 'prs-admin-team-configs',
+    to: '/prs/admin/team-configs',
+    title: 'تنظیمات تیم‌ها',
+    icon: Setting2,
+    disabled: false,
+  },
+  {
     key: 'change-password',
     to: '/change-password',
     title: 'تغییر رمز عبور',

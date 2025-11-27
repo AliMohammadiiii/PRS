@@ -10,8 +10,9 @@ import {
   IconButton,
 } from 'injast-core/components';
 import { defaultColors } from 'injast-core/constants';
-import { CheckCircle, XCircle, FileText, X } from 'lucide-react';
-import { Chip } from '@mui/material';
+import { CheckCircle, XCircle, FileText, X, CheckCircle2, Upload, Trash2 } from 'lucide-react';
+import { Chip, Stepper, Step, StepLabel, StepConnector } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import PageHeader from '../../../../components/PageHeader';
 import PrsDynamicForm from '@/components/prs/PrsDynamicForm';
 import PrsAttachmentsPanel from '@/components/prs/PrsAttachmentsPanel';
@@ -46,9 +47,14 @@ function PurchaseRequestDetailPage() {
   const [isActioning, setIsActioning] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
+  const [rejectFiles, setRejectFiles] = useState<File[]>([]);
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [approveModalOpen, setApproveModalOpen] = useState(false);
+  const [approveComment, setApproveComment] = useState('');
+  const [approveFiles, setApproveFiles] = useState<File[]>([]);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [completeComment, setCompleteComment] = useState('');
+  const [completeFiles, setCompleteFiles] = useState<File[]>([]);
 
   const loadRequest = useCallback(async () => {
     try {
@@ -77,11 +83,16 @@ function PurchaseRequestDetailPage() {
 
     try {
       setIsActioning(true);
-      const updated = await prsApi.approveRequest(request.id);
+      const updated = await prsApi.approveRequest(request.id, {
+        comment: approveComment || undefined,
+        files: approveFiles.length > 0 ? approveFiles : undefined,
+      });
       setRequest(updated);
       // Reload to get latest state
       await loadRequest();
       setApproveModalOpen(false);
+      setApproveComment('');
+      setApproveFiles([]);
       
       // Show success toast
       toast({
@@ -127,10 +138,14 @@ function PurchaseRequestDetailPage() {
     try {
       setIsActioning(true);
       setRejectError(null);
-      const updated = await prsApi.rejectRequest(request.id, { comment: rejectComment });
+      const updated = await prsApi.rejectRequest(request.id, {
+        comment: rejectComment,
+        files: rejectFiles.length > 0 ? rejectFiles : undefined,
+      });
       setRequest(updated);
       setRejectModalOpen(false);
       setRejectComment('');
+      setRejectFiles([]);
       // Reload to get latest state
       await loadRequest();
       
@@ -173,11 +188,16 @@ function PurchaseRequestDetailPage() {
 
     try {
       setIsActioning(true);
-      const updated = await prsApi.completeRequest(request.id);
+      const updated = await prsApi.completeRequest(request.id, {
+        comment: completeComment || undefined,
+        files: completeFiles.length > 0 ? completeFiles : undefined,
+      });
       setRequest(updated);
       // Reload to get latest state
       await loadRequest();
       setCompleteModalOpen(false);
+      setCompleteComment('');
+      setCompleteFiles([]);
       
       // Show success toast
       toast({
@@ -430,13 +450,13 @@ function PurchaseRequestDetailPage() {
                 {request.purchase_type.title}
               </Typography>
             </Box>
-            {request.current_step_name && (
+            {(request.effective_step_name || request.current_step_name || request.current_template_step_name) && (
               <Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   مرحله فعلی
                 </Typography>
                 <Typography variant="body1" fontWeight={600}>
-                  {request.current_step_name}
+                  {request.effective_step_name || request.current_step_name || request.current_template_step_name}
                 </Typography>
               </Box>
             )}
@@ -467,6 +487,60 @@ function PurchaseRequestDetailPage() {
               <Typography variant="body1" color="error" sx={{ lineHeight: 1.8 }}>
                 {request.rejection_comment}
               </Typography>
+            </Box>
+          )}
+
+          {/* Workflow Progress Section */}
+          {(request.workflow_template_name || request.total_workflow_steps) && (
+            <Box sx={{ mt: 3, p: 3, bgcolor: defaultColors.neutral[50], borderRadius: 2, border: `1px solid ${defaultColors.neutral[200]}` }}>
+              <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 2 }}>
+                پیشرفت گردش کار
+              </Typography>
+              {request.workflow_template_name && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <strong>قالب گردش کار:</strong> {request.workflow_template_name}
+                </Typography>
+              )}
+              {request.total_workflow_steps && request.current_template_step_order && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    مرحله {request.current_template_step_order} از {request.total_workflow_steps}
+                  </Typography>
+                  <Box
+                    sx={{
+                      height: 8,
+                      bgcolor: defaultColors.neutral[200],
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: '100%',
+                        width: `${(request.current_template_step_order / request.total_workflow_steps) * 100}%`,
+                        bgcolor: request.is_at_finance_step ? defaultColors.success[500] : defaultColors.primary[500],
+                        borderRadius: 4,
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </Box>
+                </Box>
+              )}
+              {request.is_at_finance_step && (
+                <Chip
+                  icon={<CheckCircle2 size={16} />}
+                  label="در مرحله بررسی مالی"
+                  size="small"
+                  sx={{
+                    bgcolor: defaultColors.success[100],
+                    color: defaultColors.success[700],
+                    fontWeight: 600,
+                    '& .MuiChip-icon': {
+                      color: defaultColors.success[700],
+                    },
+                  }}
+                />
+              )}
             </Box>
           )}
           
@@ -566,20 +640,91 @@ function PurchaseRequestDetailPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   <strong>فروشنده:</strong> {request.vendor_name}
                 </Typography>
-                {request.current_step_name && (
+                {(request.effective_step_name || request.current_step_name || request.current_template_step_name) && (
                   <Typography variant="body2" color="text.secondary">
-                    <strong>مرحله فعلی:</strong> {request.current_step_name}
+                    <strong>مرحله فعلی:</strong> {request.effective_step_name || request.current_step_name || request.current_template_step_name}
                   </Typography>
                 )}
               </Box>
             </Box>
           )}
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="توضیحات (اختیاری)"
+            value={approveComment}
+            onChange={(e) => setApproveComment(e.target.value)}
+            sx={{ mb: 2 }}
+            disabled={isActioning}
+          />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              فایل‌های پیوست (اختیاری)
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setApproveFiles((prev) => [...prev, ...files]);
+              }}
+              disabled={isActioning}
+              style={{ display: 'none' }}
+              id="approve-file-input"
+            />
+            <label htmlFor="approve-file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload className="w-4 h-4" />}
+                disabled={isActioning}
+                sx={{ mb: 1 }}
+              >
+                انتخاب فایل
+              </Button>
+            </label>
+            {approveFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {approveFiles.map((file, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2">{file.name}</Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setApproveFiles((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                      disabled={isActioning}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             <Button
               variant="outlined"
               color="primary"
               buttonSize="M"
-              onClick={() => setApproveModalOpen(false)}
+              onClick={() => {
+                setApproveModalOpen(false);
+                setApproveComment('');
+                setApproveFiles([]);
+              }}
               disabled={isActioning}
             >
               انصراف
@@ -648,20 +793,91 @@ function PurchaseRequestDetailPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   <strong>نوع خرید:</strong> {request.purchase_type.title}
                 </Typography>
-                {request.current_step_name && (
+                {(request.effective_step_name || request.current_step_name || request.current_template_step_name) && (
                   <Typography variant="body2" color="text.secondary">
-                    <strong>مرحله فعلی:</strong> {request.current_step_name}
+                    <strong>مرحله فعلی:</strong> {request.effective_step_name || request.current_step_name || request.current_template_step_name}
                   </Typography>
                 )}
               </Box>
             </Box>
           )}
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="توضیحات (اختیاری)"
+            value={completeComment}
+            onChange={(e) => setCompleteComment(e.target.value)}
+            sx={{ mb: 2 }}
+            disabled={isActioning}
+          />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              فایل‌های پیوست (اختیاری)
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setCompleteFiles((prev) => [...prev, ...files]);
+              }}
+              disabled={isActioning}
+              style={{ display: 'none' }}
+              id="complete-file-input"
+            />
+            <label htmlFor="complete-file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload className="w-4 h-4" />}
+                disabled={isActioning}
+                sx={{ mb: 1 }}
+              >
+                انتخاب فایل
+              </Button>
+            </label>
+            {completeFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {completeFiles.map((file, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2">{file.name}</Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setCompleteFiles((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                      disabled={isActioning}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             <Button
               variant="outlined"
               color="primary"
               buttonSize="M"
-              onClick={() => setCompleteModalOpen(false)}
+              onClick={() => {
+                setCompleteModalOpen(false);
+                setCompleteComment('');
+                setCompleteFiles([]);
+              }}
               disabled={isActioning}
             >
               انصراف
@@ -687,6 +903,7 @@ function PurchaseRequestDetailPage() {
           if (!isActioning) {
             setRejectModalOpen(false);
             setRejectComment('');
+            setRejectFiles([]);
             setRejectError(null);
           }
         }}
@@ -698,6 +915,7 @@ function PurchaseRequestDetailPage() {
               if (!isActioning) {
                 setRejectModalOpen(false);
                 setRejectComment('');
+                setRejectFiles([]);
                 setRejectError(null);
               }
             }}
@@ -733,9 +951,66 @@ function PurchaseRequestDetailPage() {
               setRejectComment(e.target.value);
               setRejectError(null);
             }}
-            sx={{ mb: 3 }}
+            sx={{ mb: 2 }}
             disabled={isActioning}
           />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              فایل‌های پیوست (اختیاری)
+            </Typography>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setRejectFiles((prev) => [...prev, ...files]);
+              }}
+              disabled={isActioning}
+              style={{ display: 'none' }}
+              id="reject-file-input"
+            />
+            <label htmlFor="reject-file-input">
+              <Button
+                component="span"
+                variant="outlined"
+                startIcon={<Upload className="w-4 h-4" />}
+                disabled={isActioning}
+                sx={{ mb: 1 }}
+              >
+                انتخاب فایل
+              </Button>
+            </label>
+            {rejectFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {rejectFiles.map((file, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2">{file.name}</Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setRejectFiles((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                      disabled={isActioning}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             <Button
               variant="outlined"
@@ -744,6 +1019,7 @@ function PurchaseRequestDetailPage() {
               onClick={() => {
                 setRejectModalOpen(false);
                 setRejectComment('');
+                setRejectFiles([]);
                 setRejectError(null);
               }}
               disabled={isActioning}

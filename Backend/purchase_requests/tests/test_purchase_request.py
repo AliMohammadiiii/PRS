@@ -79,7 +79,8 @@ class TestNoActiveTemplate:
         serializer.is_valid(raise_exception=True)
         with pytest.raises(DRFValidationError) as exc_info:
             serializer.save()
-        assert "No active form template" in str(exc_info.value)
+        # Error message now refers to TeamPurchaseConfig instead of FormTemplate
+        assert "No active procurement configuration found" in str(exc_info.value)
 
 
 @pytest.mark.django_db

@@ -18,6 +18,7 @@ import DataGridLoading from 'src/shared/components/DataGridLoading';
 import DataGridPagination from 'src/shared/components/DataGridPagination';
 import { DATAGRID_WRAPPER_MIN_HIGHT } from 'src/shared/constants';
 import { PurchaseRequest, PrsFinanceInboxFilters, Team } from 'src/types/api/prs';
+import { Lookup } from 'src/types/api/lookups';
 import * as prsApi from 'src/services/api/prs';
 import logger from '@/lib/logger';
 import { toast } from '@/hooks/use-toast';
@@ -25,6 +26,18 @@ import { extractErrorMessage, getPrsStatusColors } from 'src/shared/utils/prsUti
 import { Chip } from '@mui/material';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PersianDatePicker } from '@/components/ui/persian-date-picker';
+
+// Purchase type badge colors
+const getPurchaseTypeColor = (code: string) => {
+  switch (code) {
+    case 'GOODS':
+      return { bg: '#E3F2FD', color: '#1565C0' };
+    case 'SERVICE':
+      return { bg: '#FFF8E1', color: '#F57F17' };
+    default:
+      return { bg: '#F5F5F5', color: '#616161' };
+  }
+};
 
 export const Route = createFileRoute('/(dashboard)/_dashboardLayout/prs/finance/')({
   component: FinanceInboxPage,
@@ -34,8 +47,10 @@ function FinanceInboxPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [purchaseTypes, setPurchaseTypes] = useState<Lookup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  const [isLoadingPurchaseTypes, setIsLoadingPurchaseTypes] = useState(false);
   const [filters, setFilters] = useState<PrsFinanceInboxFilters>({});
   const [vendorSearch, setVendorSearch] = useState('');
 
@@ -53,6 +68,22 @@ function FinanceInboxPage() {
       }
     };
     loadTeams();
+  }, []);
+
+  // Load purchase types for filter
+  useEffect(() => {
+    const loadPurchaseTypes = async () => {
+      try {
+        setIsLoadingPurchaseTypes(true);
+        const data = await prsApi.fetchPurchaseTypes();
+        setPurchaseTypes(data);
+      } catch (err: any) {
+        logger.error('Error loading purchase types:', err);
+      } finally {
+        setIsLoadingPurchaseTypes(false);
+      }
+    };
+    loadPurchaseTypes();
   }, []);
 
   const loadRequests = useCallback(async () => {
@@ -132,6 +163,33 @@ function FinanceInboxPage() {
       headerAlign: 'center',
     },
     {
+      field: 'purchase_type',
+      headerName: 'نوع خرید',
+      width: 120,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<PurchaseRequest>) => {
+        const purchaseType = params.row.purchase_type;
+        if (!purchaseType) return '-';
+        const colors = getPurchaseTypeColor(purchaseType.code);
+        return (
+          <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <Chip
+              label={purchaseType.title}
+              size="small"
+              sx={{
+                backgroundColor: colors.bg,
+                color: colors.color,
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                height: 24,
+              }}
+            />
+          </Box>
+        );
+      },
+    },
+    {
       field: 'status',
       headerName: 'وضعیت',
       width: 150,
@@ -159,14 +217,14 @@ function FinanceInboxPage() {
       },
     },
     {
-      field: 'current_step_name',
+      field: 'effective_step_name',
       headerName: 'مرحله فعلی',
       width: 180,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params: GridRenderCellParams<PurchaseRequest>) => (
         <Typography variant="body2" sx={{ textAlign: 'center', width: '100%' }}>
-          {params.row.current_step_name || '-'}
+          {params.row.effective_step_name || params.row.current_step_name || params.row.current_template_step_name || '-'}
         </Typography>
       ),
     },
@@ -283,7 +341,25 @@ function FinanceInboxPage() {
                 ))}
               </Select>
             </Grid>
-            <Grid size={12} md={3}>
+            <Grid size={12} md={2}>
+              <Select
+                fullWidth
+                height={48}
+                value={filters.purchaseType || ''}
+                onChange={(e) => handleFilterChange('purchaseType', e.target.value)}
+                placeholder="نوع خرید"
+                size="small"
+                disabled={isLoadingPurchaseTypes}
+              >
+                <MenuItem value="">همه انواع</MenuItem>
+                {purchaseTypes.map((type) => (
+                  <MenuItem key={type.id} value={type.code}>
+                    {type.title}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Grid>
+            <Grid size={12} md={2}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <TextField
                   fullWidth
@@ -314,7 +390,7 @@ function FinanceInboxPage() {
                 </Button>
               </Box>
             </Grid>
-            <Grid size={12} md={3}>
+            <Grid size={12} md={2}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <PersianDatePicker
                   fullWidth
@@ -360,10 +436,12 @@ function FinanceInboxPage() {
             rows={requests}
             columns={columns}
             getRowId={(row) => row.id}
+            getRowHeight={() => 'auto'}
             onRowClick={handleRowClick}
             disableRowSelectionOnClick
             sx={{
               '& .MuiDataGrid-row': {
+                minHeight: '56px !important',
                 cursor: 'pointer',
                 '&:hover': {
                   backgroundColor: defaultColors.neutral[50],
@@ -376,6 +454,8 @@ function FinanceInboxPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                whiteSpace: 'normal',
+                wordWrap: 'break-word',
               },
               '& .MuiDataGrid-columnHeaders': {
                 '& .MuiDataGrid-columnHeader': {

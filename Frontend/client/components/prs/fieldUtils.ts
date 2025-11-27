@@ -60,6 +60,7 @@ export function buildInitialValuesFromFields(fields: FormField[]): Record<string
 /**
  * Convert form values to API payload format
  * Takes fields array and a record of values keyed by field.id
+ * Only includes fields that have a non-null/non-empty value
  */
 export function convertFormValuesToApiFormat(
   fields: FormField[],
@@ -70,29 +71,47 @@ export function convertFormValuesToApiFormat(
     .map((field) => {
       const value = fieldValues[field.id];
       const result: PurchaseRequestFieldValueWrite = { field_id: field.id };
+      let hasValue = false;
 
       switch (field.field_type) {
         case 'TEXT':
-          result.value_text = value || null;
+          if (value !== null && value !== undefined && value !== '') {
+            result.value_text = value;
+            hasValue = true;
+          }
           break;
         case 'NUMBER':
-          result.value_number =
-            value !== null && value !== undefined && value !== '' ? Number(value) : null;
+          if (value !== null && value !== undefined && value !== '') {
+            result.value_number = Number(value);
+            hasValue = true;
+          }
           break;
         case 'DATE':
-          result.value_date = value || null;
+          if (value !== null && value !== undefined && value !== '') {
+            result.value_date = value;
+            hasValue = true;
+          }
           break;
         case 'BOOLEAN':
-          result.value_bool = value === true || value === 'true';
+          // For boolean, only include if explicitly set (true or false)
+          if (value !== null && value !== undefined) {
+            result.value_bool = value === true || value === 'true';
+            hasValue = true;
+          }
           break;
         case 'DROPDOWN':
-          result.value_dropdown = value || null;
+          if (value !== null && value !== undefined && value !== '') {
+            result.value_dropdown = value;
+            hasValue = true;
+          }
           break;
         // FILE_UPLOAD is filtered out above
       }
 
-      return result;
-    });
+      // Only return fields that have a value
+      return hasValue ? result : null;
+    })
+    .filter((item): item is PurchaseRequestFieldValueWrite => item !== null);
 }
 
 /**

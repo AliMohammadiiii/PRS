@@ -155,6 +155,7 @@ export function GroupsTable({ data, onEdit }: GroupsTableProps) {
           rows={rows}
           columns={tableColumns}
           loading={false}
+          getRowHeight={() => 'auto'}
           slots={{
             loadingOverlay: DataGridLoading,
             noRowsOverlay: EmptyState,
@@ -174,6 +175,8 @@ export function GroupsTable({ data, onEdit }: GroupsTableProps) {
               alignItems: 'center',
               fontSize: '14px',
               borderBottom: '1px solid #e5e7ea',
+              whiteSpace: 'normal',
+              wordWrap: 'break-word',
             },
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#f4f6fa',
@@ -184,6 +187,7 @@ export function GroupsTable({ data, onEdit }: GroupsTableProps) {
               fontSize: '14px',
             },
             '& .MuiDataGrid-row': {
+              minHeight: '56px !important',
               '&:nth-of-type(even)': {
                 backgroundColor: '#fafbfc',
               },

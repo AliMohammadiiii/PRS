@@ -136,7 +136,7 @@ const Header = () => {
                   {/* Team Dropdown (PRS) */}
                   {teams.length > 0 && (
                     <Select
-                      value={selectedTeam?.id || ''}
+                      value={selectedTeam?.id && teams.some(t => t.id === selectedTeam.id) ? selectedTeam.id : ''}
                       onChange={(e) => {
                         const team = teams.find((t) => t.id === e.target.value);
                         if (team) {
@@ -145,6 +145,7 @@ const Header = () => {
                       }}
                       size="small"
                       height={48}
+                      displayEmpty
                       sx={{
                         minWidth: 150,
                         bgcolor: defaultColors.neutral[50],

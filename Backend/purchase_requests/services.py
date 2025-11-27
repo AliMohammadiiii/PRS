@@ -1,7 +1,7 @@
 """
 Helper functions for Purchase Request operations
 """
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from django.db.models import Q, Exists, OuterRef, Prefetch
 from django.core.mail import send_mail
 from django.conf import settings
@@ -13,7 +13,10 @@ from accounts.models import AccessScope
 from purchase_requests.models import PurchaseRequest, RequestFieldValue
 from prs_forms.models import FormField, FormTemplate
 from attachments.models import AttachmentCategory, Attachment
-from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover
+from workflows.models import (
+    Workflow, WorkflowStep, WorkflowStepApprover,
+    WorkflowTemplate, WorkflowTemplateStep, WorkflowTemplateStepApprover
+)
 from approvals.models import ApprovalHistory
 from audit.models import AuditEvent, FieldChange
 
@@ -65,8 +68,54 @@ def get_completed_status() -> Lookup:
     return get_request_status_lookup('COMPLETED')
 
 
+# =============================================================================
+# NEW TEMPLATE-BASED WORKFLOW FUNCTIONS
+# =============================================================================
+
+def get_first_workflow_template_step(workflow_template: WorkflowTemplate) -> Optional[WorkflowTemplateStep]:
+    """Get the first workflow template step for a workflow template"""
+    if not workflow_template:
+        return None
+    return WorkflowTemplateStep.objects.filter(
+        workflow_template=workflow_template,
+        is_active=True
+    ).order_by('step_order').first()
+
+
+def get_first_workflow_step_for_request(request: PurchaseRequest) -> Optional[WorkflowTemplateStep]:
+    """
+    Get the first workflow step for a purchase request.
+    Uses the request's workflow_template field.
+    """
+    if not request.workflow_template:
+        return None
+    return get_first_workflow_template_step(request.workflow_template)
+
+
+def get_next_workflow_template_step(current_step: WorkflowTemplateStep) -> Optional[WorkflowTemplateStep]:
+    """Get the next workflow template step in the same workflow template, ordered by step_order"""
+    if not current_step:
+        return None
+    
+    next_step = WorkflowTemplateStep.objects.filter(
+        workflow_template=current_step.workflow_template,
+        step_order__gt=current_step.step_order,
+        is_active=True
+    ).order_by('step_order').first()
+    
+    return next_step
+
+
+# =============================================================================
+# LEGACY WORKFLOW FUNCTIONS (for backward compatibility)
+# =============================================================================
+
 def get_first_workflow_step(team) -> Optional[WorkflowStep]:
-    """Get the first workflow step for a team"""
+    """
+    LEGACY: Get the first workflow step for a team.
+    This function is kept for backward compatibility with old requests.
+    New code should use get_first_workflow_step_for_request() instead.
+    """
     try:
         workflow = Workflow.objects.get(team=team, is_active=True)
         first_step = WorkflowStep.objects.filter(
@@ -78,11 +127,19 @@ def get_first_workflow_step(team) -> Optional[WorkflowStep]:
         return None
 
 
-def get_next_workflow_step(current_step: WorkflowStep) -> Optional[WorkflowStep]:
-    """Get the next workflow step in the same workflow, ordered by step_order"""
+def get_next_workflow_step(current_step: Union[WorkflowStep, WorkflowTemplateStep]) -> Optional[Union[WorkflowStep, WorkflowTemplateStep]]:
+    """
+    Get the next workflow step in the same workflow, ordered by step_order.
+    Works with both legacy WorkflowStep and new WorkflowTemplateStep.
+    """
     if not current_step:
         return None
     
+    # Handle WorkflowTemplateStep
+    if isinstance(current_step, WorkflowTemplateStep):
+        return get_next_workflow_template_step(current_step)
+    
+    # Legacy WorkflowStep
     next_step = WorkflowStep.objects.filter(
         workflow=current_step.workflow,
         step_order__gt=current_step.step_order,
@@ -92,38 +149,84 @@ def get_next_workflow_step(current_step: WorkflowStep) -> Optional[WorkflowStep]
     return next_step
 
 
+# =============================================================================
+# UNIFIED STEP HANDLING (works with both legacy and new models)
+# =============================================================================
+
+def get_current_step(request: PurchaseRequest) -> Optional[Union[WorkflowStep, WorkflowTemplateStep]]:
+    """
+    Get the current step for a purchase request.
+    Returns WorkflowTemplateStep for new requests, WorkflowStep for legacy requests.
+    """
+    # Prefer template-based step for new requests
+    if request.current_template_step:
+        return request.current_template_step
+    # Fall back to legacy step
+    return request.current_step
+
+
+def set_current_step(request: PurchaseRequest, step: Optional[Union[WorkflowStep, WorkflowTemplateStep]]):
+    """
+    Set the current step for a purchase request.
+    Handles both legacy WorkflowStep and new WorkflowTemplateStep.
+    """
+    if step is None:
+        request.current_step = None
+        request.current_template_step = None
+    elif isinstance(step, WorkflowTemplateStep):
+        request.current_template_step = step
+        request.current_step = None  # Clear legacy step
+    else:
+        request.current_step = step
+        request.current_template_step = None  # Clear template step
+
+
 def ensure_user_is_step_approver(user, request: PurchaseRequest):
     """
     Ensure the user is configured as an approver for the request's current step.
     Raises PermissionDenied if not.
+    Works with both legacy and template-based steps.
     """
-    if not request.current_step:
+    current_step = get_current_step(request)
+    if not current_step:
         raise PermissionDenied('Request does not have a current step.')
 
-    # Get all active roles configured for this step
-    step_role_ids = list(
-        WorkflowStepApprover.objects.filter(
-            step=request.current_step,
-            is_active=True,
-        ).values_list('role_id', flat=True)
-    )
+    # Determine which approver model to query
+    if isinstance(current_step, WorkflowTemplateStep):
+        step_role_ids = list(
+            WorkflowTemplateStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        )
+        # Templates are team-agnostic - use request's team
+        team_for_lookup = request.team
+    else:
+        # Legacy WorkflowStep
+        step_role_ids = list(
+            WorkflowStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        )
+        team_for_lookup = current_step.workflow.team
 
     if not step_role_ids:
         raise PermissionDenied(
-            f'No approver roles are configured for step "{request.current_step.step_name}".'
+            f'No approver roles are configured for step "{current_step.step_name}".'
         )
 
     # Check if user has at least one of the required roles for this team
     has_role = AccessScope.objects.filter(
         user=user,
-        team=request.team,
+        team=team_for_lookup,
         role_id__in=step_role_ids,
         is_active=True,
     ).exists()
 
     if not has_role:
         raise PermissionDenied(
-            f'You are not authorized to approve requests at step "{request.current_step.step_name}".'
+            f'You are not authorized to approve requests at step "{current_step.step_name}".'
         )
 
 
@@ -131,49 +234,71 @@ def ensure_user_is_finance_reviewer(user, request: PurchaseRequest):
     """
     Ensure the user is a finance reviewer for the request's current finance review step.
     Raises PermissionDenied if not.
+    Works with both legacy and template-based steps.
     """
-    if not request.current_step:
+    current_step = get_current_step(request)
+    if not current_step:
         raise PermissionDenied('Request does not have a current step.')
 
-    if not request.current_step.is_finance_review:
+    if not current_step.is_finance_review:
         raise PermissionDenied('Request is not at a finance review step.')
 
-    # Get all active finance reviewer roles for this step
-    step_role_ids = list(
-        WorkflowStepApprover.objects.filter(
-            step=request.current_step,
-            is_active=True,
-        ).values_list('role_id', flat=True)
-    )
+    # Determine which approver model to query
+    if isinstance(current_step, WorkflowTemplateStep):
+        step_role_ids = list(
+            WorkflowTemplateStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        )
+        # Templates are team-agnostic - use request's team
+        team_for_lookup = request.team
+    else:
+        # Legacy WorkflowStep
+        step_role_ids = list(
+            WorkflowStepApprover.objects.filter(
+                step=current_step,
+                is_active=True,
+            ).values_list('role_id', flat=True)
+        )
+        team_for_lookup = current_step.workflow.team
 
     if not step_role_ids:
         raise PermissionDenied(
-            f'No finance reviewer roles are configured for step "{request.current_step.step_name}".'
+            f'No finance reviewer roles are configured for step "{current_step.step_name}".'
         )
 
     has_role = AccessScope.objects.filter(
         user=user,
-        team=request.team,
+        team=team_for_lookup,
         role_id__in=step_role_ids,
         is_active=True,
     ).exists()
 
     if not has_role:
         raise PermissionDenied(
-            f'You are not authorized to complete requests at finance review step "{request.current_step.step_name}".'
+            f'You are not authorized to complete requests at finance review step "{current_step.step_name}".'
         )
 
 
-def have_all_approvers_approved(request: PurchaseRequest, step: WorkflowStep) -> bool:
+def have_all_approvers_approved(request: PurchaseRequest, step: Union[WorkflowStep, WorkflowTemplateStep]) -> bool:
     """
     Check if all approvers for a step have approved the request.
     Returns True if all approvers have an ApprovalHistory with action=APPROVE.
+    Works with both legacy and template-based steps.
     """
-    # Get all active approver roles for this step
-    step_role_ids_qs = WorkflowStepApprover.objects.filter(
-        step=step,
-        is_active=True,
-    ).values_list('role_id', flat=True)
+    # Determine which approver model to query
+    if isinstance(step, WorkflowTemplateStep):
+        step_role_ids_qs = WorkflowTemplateStepApprover.objects.filter(
+            step=step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
+    else:
+        # Legacy WorkflowStep
+        step_role_ids_qs = WorkflowStepApprover.objects.filter(
+            step=step,
+            is_active=True,
+        ).values_list('role_id', flat=True)
 
     if not step_role_ids_qs.exists():
         # No roles configured - cannot be fully approved
@@ -185,11 +310,21 @@ def have_all_approvers_approved(request: PurchaseRequest, step: WorkflowStep) ->
     # IMPORTANT: Only consider approvals from the current submission cycle.
     # When a request is rejected and then resubmitted, older approvals (from
     # previous cycles) should not count towards the new cycle.
-    approvals_qs = ApprovalHistory.objects.filter(
-        request=request,
-        step=step,
-        action=ApprovalHistory.APPROVE,
-    )
+    
+    # For template-based steps, we need to check using template_step field
+    if isinstance(step, WorkflowTemplateStep):
+        approvals_qs = ApprovalHistory.objects.filter(
+            request=request,
+            template_step=step,
+            action=ApprovalHistory.APPROVE,
+        )
+    else:
+        approvals_qs = ApprovalHistory.objects.filter(
+            request=request,
+            step=step,
+            action=ApprovalHistory.APPROVE,
+        )
+    
     if request.submitted_at:
         approvals_qs = approvals_qs.filter(timestamp__gte=request.submitted_at)
 
@@ -307,6 +442,7 @@ def create_audit_event_for_request_created(
         metadata={
             'team_id': str(purchase_request.team.id),
             'form_template_id': str(purchase_request.form_template.id),
+            'workflow_template_id': str(purchase_request.workflow_template.id) if purchase_request.workflow_template else None,
             'status': purchase_request.status.code if purchase_request.status else None,
         }
     )
@@ -368,6 +504,7 @@ def create_audit_event_for_request_submitted(
     old_status_code: Optional[str] = None
 ) -> AuditEvent:
     """Create an audit event for request submission"""
+    current_step = get_current_step(purchase_request)
     return AuditEvent.objects.create(
         event_type=AuditEvent.REQUEST_SUBMITTED,
         actor=actor,
@@ -375,7 +512,7 @@ def create_audit_event_for_request_submitted(
         metadata={
             'old_status': old_status_code,
             'new_status': purchase_request.status.code if purchase_request.status else None,
-            'current_step_id': str(purchase_request.current_step.id) if purchase_request.current_step else None,
+            'current_step_id': str(current_step.id) if current_step else None,
         }
     )
 
@@ -551,9 +688,10 @@ def create_audit_event_for_attachment_removed(
 def create_audit_event_for_request_approved(
     purchase_request: PurchaseRequest,
     actor,
-    step: WorkflowStep
+    step: Union[WorkflowStep, WorkflowTemplateStep]
 ) -> AuditEvent:
     """Create an audit event for request approval"""
+    current_step = get_current_step(purchase_request)
     return AuditEvent.objects.create(
         event_type=AuditEvent.APPROVAL,
         actor=actor,
@@ -563,7 +701,7 @@ def create_audit_event_for_request_approved(
             'step_name': step.step_name,
             'step_order': step.step_order,
             'status': purchase_request.status.code if purchase_request.status else None,
-            'current_step_id': str(purchase_request.current_step.id) if purchase_request.current_step else None,
+            'current_step_id': str(current_step.id) if current_step else None,
         }
     )
 
@@ -571,7 +709,7 @@ def create_audit_event_for_request_approved(
 def create_audit_event_for_request_rejected(
     purchase_request: PurchaseRequest,
     actor,
-    step: WorkflowStep,
+    step: Union[WorkflowStep, WorkflowTemplateStep],
     comment: str,
     old_status_code: Optional[str] = None
 ) -> AuditEvent:
@@ -595,7 +733,7 @@ def create_audit_event_for_request_completed(
     purchase_request: PurchaseRequest,
     actor,
     old_status_code: Optional[str] = None,
-    step: Optional[WorkflowStep] = None
+    step: Optional[Union[WorkflowStep, WorkflowTemplateStep]] = None
 ) -> AuditEvent:
     """Create an audit event for request completion"""
     return AuditEvent.objects.create(
@@ -629,14 +767,16 @@ def send_completion_email(purchase_request: PurchaseRequest):
         # Get approval history for summary
         approval_history = ApprovalHistory.objects.filter(
             request=purchase_request
-        ).select_related('step', 'approver').order_by('timestamp')
+        ).select_related('step', 'template_step', 'approver').order_by('timestamp')
         
         # Build approval summary
         approval_summary_lines = []
         for approval in approval_history:
             action_label = 'Approved' if approval.action == ApprovalHistory.APPROVE else 'Rejected'
+            step_name = (approval.template_step.step_name if approval.template_step 
+                        else (approval.step.step_name if approval.step else 'Unknown'))
             approval_summary_lines.append(
-                f"  - {approval.step.step_name}: {approval.approver.get_full_name() or approval.approver.username} "
+                f"  - {step_name}: {approval.approver.get_full_name() or approval.approver.username} "
                 f"({action_label}) at {approval.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
             )
         approval_summary = '\n'.join(approval_summary_lines) if approval_summary_lines else '  No approvals recorded.'
@@ -717,11 +857,13 @@ def _get_base_purchase_request_queryset():
     return PurchaseRequest.objects.select_related(
         'team',
         'form_template',
+        'workflow_template',
         'status',
         'status__type',  # For LookupSerializer
         'purchase_type',
         'purchase_type__type',  # For LookupSerializer
         'current_step',
+        'current_template_step',
         'requestor',
     ).prefetch_related(
         Prefetch(
@@ -765,48 +907,83 @@ def get_approver_inbox_qs(user):
         QuerySet of PurchaseRequest objects for the approver inbox
     """
     # Base queryset: active requests with current step in approval states
-    # Base queryset: active requests with current step in approval states
     qs = _get_base_purchase_request_queryset().filter(
         is_active=True,
-        current_step__isnull=False,
         status__code__in=['PENDING_APPROVAL', 'IN_REVIEW'],
+    ).filter(
+        # Has either a legacy step or a template step
+        Q(current_step__isnull=False) | Q(current_template_step__isnull=False)
     )
 
-    # Restrict to requests where user has at least one of the roles configured
-    # on the current step for that team.
-    # Correlate on WorkflowStepApprover -> WorkflowStep -> Workflow -> Team so that
-    # roles are matched for the correct team. We cannot reference `team` directly
-    # on WorkflowStepApprover (it doesn't have that field), so we use the
-    # step->workflow->team chain for the inner AccessScope subquery.
-    step_role_exists = WorkflowStepApprover.objects.filter(
+    # Get all (team_id, role_id) pairs where user has active AccessScope
+    user_team_roles = set(
+        AccessScope.objects.filter(
+            user=user,
+            is_active=True,
+            team__isnull=False,
+        ).values_list('team_id', 'role_id')
+    )
+    
+    if not user_team_roles:
+        # User has no team roles, return empty queryset
+        return qs.none()
+    
+    # For template-based requests: check if user has role for current step's team
+    # We need to check:
+    # 1. WorkflowTemplateStepApprover.role matches user's AccessScope.role for the request's team
+    # 2. The step is active
+    template_step_has_user_role = WorkflowTemplateStepApprover.objects.filter(
+        step=OuterRef('current_template_step'),
+        is_active=True,
+    ).filter(
+        # Match role to any of user's roles in the request's team
+        # We use OuterRef('team_id') for the PurchaseRequest team
+        role_id__in=[role_id for team_id, role_id in user_team_roles],
+    )
+    
+    # For legacy requests: check WorkflowStepApprover
+    legacy_step_has_user_role = WorkflowStepApprover.objects.filter(
         step=OuterRef('current_step'),
         is_active=True,
-        role_id__in=AccessScope.objects.filter(
-            user=user,
-            team=OuterRef('step__workflow__team'),
-            is_active=True,
-        ).values('role_id'),
+    ).filter(
+        role_id__in=[role_id for team_id, role_id in user_team_roles],
     )
-
-    qs = qs.filter(Exists(step_role_exists))
+    
+    # Get team IDs where user has any role
+    user_team_ids = set(team_id for team_id, role_id in user_team_roles)
+    
+    qs = qs.filter(
+        # For template-based: check step has matching role AND request is in user's teams
+        (Q(current_template_step__isnull=False) & Exists(template_step_has_user_role) & Q(team_id__in=user_team_ids)) |
+        # For legacy: check step has matching role AND workflow team is in user's teams
+        (Q(current_step__isnull=False) & Exists(legacy_step_has_user_role) & Q(current_step__workflow__team_id__in=user_team_ids))
+    )
     
     # Exclude requests where user has already approved the current step
-    # Use Exists subquery to check ApprovalHistory
-    already_approved = ApprovalHistory.objects.filter(
+    # Check both template and legacy approval history
+    already_approved_template = ApprovalHistory.objects.filter(
+        request=OuterRef('pk'),
+        template_step=OuterRef('current_template_step'),
+        approver=user,
+        action=ApprovalHistory.APPROVE,
+        timestamp__gte=OuterRef('submitted_at')
+    )
+    
+    already_approved_legacy = ApprovalHistory.objects.filter(
         request=OuterRef('pk'),
         step=OuterRef('current_step'),
         approver=user,
         action=ApprovalHistory.APPROVE,
-    ).filter(
-        # Only consider approvals from the current submission cycle.
-        # Older approvals (before the latest submitted_at) should not hide
-        # resubmitted requests from the inbox.
         timestamp__gte=OuterRef('submitted_at')
     )
     
-    qs = qs.exclude(Exists(already_approved))
+    qs = qs.exclude(
+        Q(current_template_step__isnull=False) & Exists(already_approved_template)
+    ).exclude(
+        Q(current_step__isnull=False) & Exists(already_approved_legacy)
+    )
     
-    # Use distinct() to avoid duplicates from the join to WorkflowStepApprover
+    # Use distinct() to avoid duplicates
     return qs.distinct()
 
 
@@ -828,24 +1005,46 @@ def get_finance_inbox_qs(user):
     qs = _get_base_purchase_request_queryset().filter(
         is_active=True,
         status__code='FINANCE_REVIEW',
-        current_step__is_finance_review=True,
+    ).filter(
+        # Has finance step (either template or legacy)
+        Q(current_template_step__is_finance_review=True) | Q(current_step__is_finance_review=True)
     )
 
-    # Restrict to requests where user has at least one of the finance roles
-    # configured on the current step for that team.
-    # Same team-correlation logic as in `get_approver_inbox_qs`.
-    step_role_exists = WorkflowStepApprover.objects.filter(
+    # Get all (team_id, role_id) pairs where user has active AccessScope
+    user_team_roles = set(
+        AccessScope.objects.filter(
+            user=user,
+            is_active=True,
+            team__isnull=False,
+        ).values_list('team_id', 'role_id')
+    )
+    
+    if not user_team_roles:
+        return qs.none()
+
+    # For template-based requests: check if step has matching role
+    template_step_has_user_role = WorkflowTemplateStepApprover.objects.filter(
+        step=OuterRef('current_template_step'),
+        is_active=True,
+        role_id__in=[role_id for team_id, role_id in user_team_roles],
+    )
+
+    # For legacy requests: check if step has matching role
+    legacy_step_has_user_role = WorkflowStepApprover.objects.filter(
         step=OuterRef('current_step'),
         is_active=True,
-        role_id__in=AccessScope.objects.filter(
-            user=user,
-            team=OuterRef('step__workflow__team'),
-            is_active=True,
-        ).values('role_id'),
+        role_id__in=[role_id for team_id, role_id in user_team_roles],
     )
-
-    qs = qs.filter(Exists(step_role_exists))
     
-    # Use distinct() to avoid duplicates from the join to WorkflowStepApprover
-    return qs.distinct()
+    # Get team IDs where user has any role
+    user_team_ids = set(team_id for team_id, role_id in user_team_roles)
 
+    qs = qs.filter(
+        # For template-based: check step has matching role AND request is in user's teams
+        (Q(current_template_step__isnull=False) & Exists(template_step_has_user_role) & Q(team_id__in=user_team_ids)) |
+        # For legacy: check step has matching role AND workflow team is in user's teams
+        (Q(current_step__isnull=False) & Exists(legacy_step_has_user_role) & Q(current_step__workflow__team_id__in=user_team_ids))
+    )
+    
+    # Use distinct() to avoid duplicates
+    return qs.distinct()

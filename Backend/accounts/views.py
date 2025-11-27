@@ -244,6 +244,52 @@ class AccessScopeViewSet(SoftDeleteModelViewSet):
     queryset = AccessScope.objects.all()
     serializer_class = AccessScopeSerializer
     permission_classes = [IsAdminUser]
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """
+        Create an access scope, or reactivate/update if one already exists with the same (user, team, role).
+        This handles the unique constraint gracefully by checking for existing scopes (even inactive ones).
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        validated_data = serializer.validated_data
+        user = validated_data.get('user')
+        team = validated_data.get('team')
+        org_node = validated_data.get('org_node')
+        role = validated_data.get('role')
+        
+        # Check if a scope already exists with the same (user, team, role) or (user, org_node, role)
+        # This includes inactive scopes since unique_together applies to all records
+        existing_scope = None
+        if team:
+            existing_scope = AccessScope.objects.filter(
+                user=user,
+                team=team,
+                role=role
+            ).first()
+        elif org_node:
+            existing_scope = AccessScope.objects.filter(
+                user=user,
+                org_node=org_node,
+                role=role
+            ).first()
+        
+        if existing_scope:
+            # Update and reactivate the existing scope
+            for key, value in validated_data.items():
+                setattr(existing_scope, key, value)
+            existing_scope.is_active = validated_data.get('is_active', True)
+            existing_scope.save()
+            
+            response_serializer = self.get_serializer(existing_scope)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        
+        # No existing scope, create a new one
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 @extend_schema(
