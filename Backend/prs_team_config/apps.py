@@ -8,3 +8,5 @@ class PrsTeamConfigConfig(AppConfig):
     path = str(Path(__file__).resolve().parent)
 
 
+
+
