@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
+from rest_framework.serializers import ValidationError as SerializerValidationError
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
 from django.db.models import Prefetch, Q
@@ -486,17 +487,32 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         """Update workflow template - handle steps if provided"""
         instance = self.get_object()
         
-        # Validate steps separately if provided
+        # Extract steps data before passing to serializer
         steps_data = request.data.get('steps')
+        
+        # Create a copy of request.data without steps for serializer validation
+        serializer_data = dict(request.data)
+        if 'steps' in serializer_data:
+            del serializer_data['steps']
+        
+        # Validate main serializer first (without steps)
+        serializer = self.get_serializer(instance, data=serializer_data, partial=kwargs.get('partial', False))
+        serializer.is_valid(raise_exception=True)
+        
+        # Validate steps separately if provided
         if steps_data is not None:
             # Validate each step using the step serializer
-            for step_data in steps_data:
+            step_errors = {}
+            for idx, step_data in enumerate(steps_data):
                 step_serializer_instance = WorkflowTemplateStepCreateSerializer(data=step_data)
-                step_serializer_instance.is_valid(raise_exception=True)
-        
-        # Validate main serializer (steps will be removed in serializer.validate())
-        serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
-        serializer.is_valid(raise_exception=True)
+                if not step_serializer_instance.is_valid():
+                    step_errors[idx] = step_serializer_instance.errors
+            
+            if step_errors:
+                # Return detailed validation errors for steps
+                raise SerializerValidationError({
+                    'steps': step_errors
+                })
         
         # Update name and description
         if 'name' in serializer.validated_data:
