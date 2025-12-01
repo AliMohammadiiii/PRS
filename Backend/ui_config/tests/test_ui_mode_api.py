@@ -130,3 +130,4 @@ class UiModeApiTests(TestCase):
         self.assertEqual(response.data['ui_mode'], 'FULL_DASHBOARD')
 
 
+

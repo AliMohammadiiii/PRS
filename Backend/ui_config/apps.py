@@ -8,3 +8,4 @@ class UiConfigConfig(AppConfig):
     path = str(Path(__file__).resolve().parent)
 
 
+
