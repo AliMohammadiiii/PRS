@@ -4,6 +4,7 @@ Helper functions for Purchase Request operations
 from typing import List, Dict, Any, Optional, Tuple, Union
 from django.db.models import Q, Exists, OuterRef, Prefetch
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
@@ -1048,3 +1049,71 @@ def get_finance_inbox_qs(user):
     
     # Use distinct() to avoid duplicates
     return qs.distinct()
+
+
+def progress_workflow_after_approval(request: PurchaseRequest) -> PurchaseRequest:
+    """
+    Progress workflow after an approval action.
+    
+    Checks if all approvers for the current step have approved.
+    If yes, moves to next step or transitions to appropriate status.
+    
+    Args:
+        request: PurchaseRequest instance
+    
+    Returns:
+        Updated PurchaseRequest instance (saved to DB)
+    """
+    current_step = get_current_step(request)
+    if not current_step:
+        return request  # No step to progress from
+    
+    # Check if all approvers have approved
+    if not have_all_approvers_approved(request, current_step):
+        return request  # Not all approvers have approved yet
+    
+    # All approvers have approved - move to next step or final status
+    next_step = get_next_workflow_step(current_step)
+    
+    if next_step and not next_step.is_finance_review:
+        # Move to next non-finance step
+        set_current_step(request, next_step)
+        request.status = get_in_review_status()
+    elif next_step and next_step.is_finance_review:
+        # Move to finance review step
+        set_current_step(request, next_step)
+        request.status = get_finance_review_status()
+    else:
+        # No next step - workflow complete (non-finance steps)
+        set_current_step(request, None)
+        request.status = get_fully_approved_status()
+    
+    request.save()
+    return request
+
+
+def handle_request_rejection(request: PurchaseRequest, comment: str, approver) -> PurchaseRequest:
+    """
+    Handle request rejection at current workflow step.
+    
+    Updates request status to REJECTED, clears current step, and sets rejection comment.
+    
+    Args:
+        request: PurchaseRequest instance
+        comment: Rejection comment (must be at least 10 characters)
+        approver: User who is rejecting
+    
+    Returns:
+        Updated PurchaseRequest instance (saved to DB)
+    """
+    # Validate comment length
+    if not comment or len(comment.strip()) < 10:
+        raise ValidationError('Rejection requires a comment with at least 10 characters.')
+    
+    # Update purchase request
+    request.status = get_rejected_status()
+    set_current_step(request, None)
+    request.rejection_comment = comment.strip()
+    request.save()
+    
+    return request

@@ -1,6 +1,6 @@
 import { FC, useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
-import { Icon, Setting2, Lock1, ArrowDown2, ArrowUp2, AddSquare, DocumentText1, TickCircle, Wallet3 } from 'iconsax-reactjs';
+import { Icon, Setting2, Lock1, ArrowDown2, ArrowUp2, AddSquare, DocumentText1, TickCircle, Wallet3, MessageText1 } from 'iconsax-reactjs';
 import { Box, Image, Typography } from 'injast-core/components';
 import { useAuth } from 'src/client/contexts/AuthContext';
 import { hasRole, isRequesterOnlyUser } from 'src/shared/utils/prsUtils';
@@ -293,28 +293,60 @@ const financeMenuConfig: MenuEntry[] = [
   },
 ];
 
-const SideBar = () => {
+// Messenger-only menu configuration:
+// Show only messenger and basic settings
+const messengerOnlyMenuConfig: MenuEntry[] = [
+  {
+    key: 'messenger',
+    to: '/messenger',
+    title: 'پیام‌رسان',
+    icon: MessageText1,
+    disabled: false,
+  },
+  {
+    key: 'change-password',
+    to: '/change-password',
+    title: 'تغییر رمز عبور',
+    icon: Lock1,
+    disabled: false,
+  },
+];
+
+interface SideBarProps {
+  isMessengerOnly?: boolean;
+}
+
+const SideBar: FC<SideBarProps> = ({ isMessengerOnly = false }) => {
+  // All hooks must be called unconditionally (Rules of Hooks)
   const location = useLocation();
   const { user } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
 
-  // Determine which menu config to use based on user type / roles
-  const isAdmin = user?.is_admin ?? false;
-  const isApprover = !!user && hasRole(user, 'APPROVER');
-  const isFinance = !!user && hasRole(user, 'FINANCE');
-  const isRequesterOnly = !!user && isRequesterOnlyUser(user);
+  // Determine menu config based on mode and user roles
+  let menuConfig: MenuEntry[];
 
-  let menuConfig: MenuEntry[] = adminMenuConfig;
-  if (!isAdmin) {
-    if (isFinance) {
-      menuConfig = financeMenuConfig;
-    } else if (isApprover) {
-      menuConfig = approverMenuConfig;
-    } else if (isRequesterOnly) {
-      menuConfig = requesterMenuConfig;
-    } else {
-      // Fallback for unknown role patterns: use requester menu (safe default)
-      menuConfig = requesterMenuConfig;
+  if (isMessengerOnly) {
+    // Messenger-only mode: show only messenger and settings
+    menuConfig = messengerOnlyMenuConfig;
+  } else {
+    // Full dashboard mode: determine menu based on user type / roles
+    const isAdmin = user?.is_admin ?? false;
+    const isApprover = !!user && hasRole(user, 'APPROVER');
+    const isFinance = !!user && hasRole(user, 'FINANCE');
+    const isRequesterOnly = !!user && isRequesterOnlyUser(user);
+
+    menuConfig = adminMenuConfig;
+    if (!isAdmin) {
+      if (isFinance) {
+        menuConfig = financeMenuConfig;
+      } else if (isApprover) {
+        menuConfig = approverMenuConfig;
+      } else if (isRequesterOnly) {
+        menuConfig = requesterMenuConfig;
+      } else {
+        // Fallback for unknown role patterns: use requester menu (safe default)
+        menuConfig = requesterMenuConfig;
+      }
     }
   }
 

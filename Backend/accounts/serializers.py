@@ -16,13 +16,11 @@ class CaseInsensitiveTokenObtainPairSerializer(TokenObtainPairSerializer):
         if username:
             # Perform case-insensitive username lookup
             User = get_user_model()
-            try:
-                user = User.objects.get(username__iexact=username)
+            # Use first() instead of get() to handle duplicate usernames gracefully
+            user = User.objects.filter(username__iexact=username).first()
+            if user:
                 # Update attrs with the actual username from database
                 attrs['username'] = user.username
-            except User.DoesNotExist:
-                # If user not found, let the parent class handle the error
-                pass
         
         # Call parent validation with the corrected username
         return super().validate(attrs)

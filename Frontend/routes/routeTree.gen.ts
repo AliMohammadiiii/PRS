@@ -15,12 +15,14 @@ import { Route as dashboardDashboardLayoutRouteImport } from './(dashboard)/_das
 import { Route as dashboardDashboardLayoutReportsIndexRouteImport } from './(dashboard)/_dashboardLayout/reports/index'
 import { Route as dashboardDashboardLayoutReportTitlesIndexRouteImport } from './(dashboard)/_dashboardLayout/report-titles/index'
 import { Route as dashboardDashboardLayoutOperationsIndexRouteImport } from './(dashboard)/_dashboardLayout/operations/index'
+import { Route as dashboardDashboardLayoutMessengerIndexRouteImport } from './(dashboard)/_dashboardLayout/messenger/index'
 import { Route as dashboardDashboardLayoutInputDemoIndexRouteImport } from './(dashboard)/_dashboardLayout/input-demo/index'
 import { Route as dashboardDashboardLayoutGroupsIndexRouteImport } from './(dashboard)/_dashboardLayout/groups/index'
 import { Route as dashboardDashboardLayoutCompanyBasicInfoIndexRouteImport } from './(dashboard)/_dashboardLayout/company-basic-info/index'
 import { Route as dashboardDashboardLayoutChangePasswordIndexRouteImport } from './(dashboard)/_dashboardLayout/change-password/index'
 import { Route as dashboardDashboardLayoutBasicInfoIndexRouteImport } from './(dashboard)/_dashboardLayout/basic-info/index'
 import { Route as dashboardDashboardLayoutAdminReviewIndexRouteImport } from './(dashboard)/_dashboardLayout/admin-review/index'
+import { Route as dashboardDashboardLayoutMessengerThreadIdRouteImport } from './(dashboard)/_dashboardLayout/messenger/$threadId'
 import { Route as dashboardDashboardLayoutAdminReviewGroupIdRouteImport } from './(dashboard)/_dashboardLayout/admin-review/$groupId'
 import { Route as dashboardDashboardLayoutReportsSubmitIndexRouteImport } from './(dashboard)/_dashboardLayout/reports/submit/index'
 import { Route as dashboardDashboardLayoutPrsMyRequestsIndexRouteImport } from './(dashboard)/_dashboardLayout/prs/my-requests/index'
@@ -68,6 +70,12 @@ const dashboardDashboardLayoutOperationsIndexRoute =
     path: '/operations/',
     getParentRoute: () => dashboardDashboardLayoutRoute,
   } as any)
+const dashboardDashboardLayoutMessengerIndexRoute =
+  dashboardDashboardLayoutMessengerIndexRouteImport.update({
+    id: '/messenger/',
+    path: '/messenger/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
 const dashboardDashboardLayoutInputDemoIndexRoute =
   dashboardDashboardLayoutInputDemoIndexRouteImport.update({
     id: '/input-demo/',
@@ -102,6 +110,12 @@ const dashboardDashboardLayoutAdminReviewIndexRoute =
   dashboardDashboardLayoutAdminReviewIndexRouteImport.update({
     id: '/admin-review/',
     path: '/admin-review/',
+    getParentRoute: () => dashboardDashboardLayoutRoute,
+  } as any)
+const dashboardDashboardLayoutMessengerThreadIdRoute =
+  dashboardDashboardLayoutMessengerThreadIdRouteImport.update({
+    id: '/messenger/$threadId',
+    path: '/messenger/$threadId',
     getParentRoute: () => dashboardDashboardLayoutRoute,
   } as any)
 const dashboardDashboardLayoutAdminReviewGroupIdRoute =
@@ -189,12 +203,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin-review/$groupId': typeof dashboardDashboardLayoutAdminReviewGroupIdRoute
+  '/messenger/$threadId': typeof dashboardDashboardLayoutMessengerThreadIdRoute
   '/admin-review': typeof dashboardDashboardLayoutAdminReviewIndexRoute
   '/basic-info': typeof dashboardDashboardLayoutBasicInfoIndexRoute
   '/change-password': typeof dashboardDashboardLayoutChangePasswordIndexRoute
   '/company-basic-info': typeof dashboardDashboardLayoutCompanyBasicInfoIndexRoute
   '/groups': typeof dashboardDashboardLayoutGroupsIndexRoute
   '/input-demo': typeof dashboardDashboardLayoutInputDemoIndexRoute
+  '/messenger': typeof dashboardDashboardLayoutMessengerIndexRoute
   '/operations': typeof dashboardDashboardLayoutOperationsIndexRoute
   '/report-titles': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/reports': typeof dashboardDashboardLayoutReportsIndexRoute
@@ -215,12 +231,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin-review/$groupId': typeof dashboardDashboardLayoutAdminReviewGroupIdRoute
+  '/messenger/$threadId': typeof dashboardDashboardLayoutMessengerThreadIdRoute
   '/admin-review': typeof dashboardDashboardLayoutAdminReviewIndexRoute
   '/basic-info': typeof dashboardDashboardLayoutBasicInfoIndexRoute
   '/change-password': typeof dashboardDashboardLayoutChangePasswordIndexRoute
   '/company-basic-info': typeof dashboardDashboardLayoutCompanyBasicInfoIndexRoute
   '/groups': typeof dashboardDashboardLayoutGroupsIndexRoute
   '/input-demo': typeof dashboardDashboardLayoutInputDemoIndexRoute
+  '/messenger': typeof dashboardDashboardLayoutMessengerIndexRoute
   '/operations': typeof dashboardDashboardLayoutOperationsIndexRoute
   '/report-titles': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/reports': typeof dashboardDashboardLayoutReportsIndexRoute
@@ -243,12 +261,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/(dashboard)/_dashboardLayout': typeof dashboardDashboardLayoutRouteWithChildren
   '/(dashboard)/_dashboardLayout/admin-review/$groupId': typeof dashboardDashboardLayoutAdminReviewGroupIdRoute
+  '/(dashboard)/_dashboardLayout/messenger/$threadId': typeof dashboardDashboardLayoutMessengerThreadIdRoute
   '/(dashboard)/_dashboardLayout/admin-review/': typeof dashboardDashboardLayoutAdminReviewIndexRoute
   '/(dashboard)/_dashboardLayout/basic-info/': typeof dashboardDashboardLayoutBasicInfoIndexRoute
   '/(dashboard)/_dashboardLayout/change-password/': typeof dashboardDashboardLayoutChangePasswordIndexRoute
   '/(dashboard)/_dashboardLayout/company-basic-info/': typeof dashboardDashboardLayoutCompanyBasicInfoIndexRoute
   '/(dashboard)/_dashboardLayout/groups/': typeof dashboardDashboardLayoutGroupsIndexRoute
   '/(dashboard)/_dashboardLayout/input-demo/': typeof dashboardDashboardLayoutInputDemoIndexRoute
+  '/(dashboard)/_dashboardLayout/messenger/': typeof dashboardDashboardLayoutMessengerIndexRoute
   '/(dashboard)/_dashboardLayout/operations/': typeof dashboardDashboardLayoutOperationsIndexRoute
   '/(dashboard)/_dashboardLayout/report-titles/': typeof dashboardDashboardLayoutReportTitlesIndexRoute
   '/(dashboard)/_dashboardLayout/reports/': typeof dashboardDashboardLayoutReportsIndexRoute
@@ -271,12 +291,14 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin-review/$groupId'
+    | '/messenger/$threadId'
     | '/admin-review'
     | '/basic-info'
     | '/change-password'
     | '/company-basic-info'
     | '/groups'
     | '/input-demo'
+    | '/messenger'
     | '/operations'
     | '/report-titles'
     | '/reports'
@@ -297,12 +319,14 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin-review/$groupId'
+    | '/messenger/$threadId'
     | '/admin-review'
     | '/basic-info'
     | '/change-password'
     | '/company-basic-info'
     | '/groups'
     | '/input-demo'
+    | '/messenger'
     | '/operations'
     | '/report-titles'
     | '/reports'
@@ -324,12 +348,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/(dashboard)/_dashboardLayout'
     | '/(dashboard)/_dashboardLayout/admin-review/$groupId'
+    | '/(dashboard)/_dashboardLayout/messenger/$threadId'
     | '/(dashboard)/_dashboardLayout/admin-review/'
     | '/(dashboard)/_dashboardLayout/basic-info/'
     | '/(dashboard)/_dashboardLayout/change-password/'
     | '/(dashboard)/_dashboardLayout/company-basic-info/'
     | '/(dashboard)/_dashboardLayout/groups/'
     | '/(dashboard)/_dashboardLayout/input-demo/'
+    | '/(dashboard)/_dashboardLayout/messenger/'
     | '/(dashboard)/_dashboardLayout/operations/'
     | '/(dashboard)/_dashboardLayout/report-titles/'
     | '/(dashboard)/_dashboardLayout/reports/'
@@ -397,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof dashboardDashboardLayoutOperationsIndexRouteImport
       parentRoute: typeof dashboardDashboardLayoutRoute
     }
+    '/(dashboard)/_dashboardLayout/messenger/': {
+      id: '/(dashboard)/_dashboardLayout/messenger/'
+      path: '/messenger'
+      fullPath: '/messenger'
+      preLoaderRoute: typeof dashboardDashboardLayoutMessengerIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
     '/(dashboard)/_dashboardLayout/input-demo/': {
       id: '/(dashboard)/_dashboardLayout/input-demo/'
       path: '/input-demo'
@@ -437,6 +470,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-review'
       fullPath: '/admin-review'
       preLoaderRoute: typeof dashboardDashboardLayoutAdminReviewIndexRouteImport
+      parentRoute: typeof dashboardDashboardLayoutRoute
+    }
+    '/(dashboard)/_dashboardLayout/messenger/$threadId': {
+      id: '/(dashboard)/_dashboardLayout/messenger/$threadId'
+      path: '/messenger/$threadId'
+      fullPath: '/messenger/$threadId'
+      preLoaderRoute: typeof dashboardDashboardLayoutMessengerThreadIdRouteImport
       parentRoute: typeof dashboardDashboardLayoutRoute
     }
     '/(dashboard)/_dashboardLayout/admin-review/$groupId': {
@@ -535,12 +575,14 @@ declare module '@tanstack/react-router' {
 
 interface dashboardDashboardLayoutRouteChildren {
   dashboardDashboardLayoutAdminReviewGroupIdRoute: typeof dashboardDashboardLayoutAdminReviewGroupIdRoute
+  dashboardDashboardLayoutMessengerThreadIdRoute: typeof dashboardDashboardLayoutMessengerThreadIdRoute
   dashboardDashboardLayoutAdminReviewIndexRoute: typeof dashboardDashboardLayoutAdminReviewIndexRoute
   dashboardDashboardLayoutBasicInfoIndexRoute: typeof dashboardDashboardLayoutBasicInfoIndexRoute
   dashboardDashboardLayoutChangePasswordIndexRoute: typeof dashboardDashboardLayoutChangePasswordIndexRoute
   dashboardDashboardLayoutCompanyBasicInfoIndexRoute: typeof dashboardDashboardLayoutCompanyBasicInfoIndexRoute
   dashboardDashboardLayoutGroupsIndexRoute: typeof dashboardDashboardLayoutGroupsIndexRoute
   dashboardDashboardLayoutInputDemoIndexRoute: typeof dashboardDashboardLayoutInputDemoIndexRoute
+  dashboardDashboardLayoutMessengerIndexRoute: typeof dashboardDashboardLayoutMessengerIndexRoute
   dashboardDashboardLayoutOperationsIndexRoute: typeof dashboardDashboardLayoutOperationsIndexRoute
   dashboardDashboardLayoutReportTitlesIndexRoute: typeof dashboardDashboardLayoutReportTitlesIndexRoute
   dashboardDashboardLayoutReportsIndexRoute: typeof dashboardDashboardLayoutReportsIndexRoute
@@ -562,6 +604,8 @@ const dashboardDashboardLayoutRouteChildren: dashboardDashboardLayoutRouteChildr
   {
     dashboardDashboardLayoutAdminReviewGroupIdRoute:
       dashboardDashboardLayoutAdminReviewGroupIdRoute,
+    dashboardDashboardLayoutMessengerThreadIdRoute:
+      dashboardDashboardLayoutMessengerThreadIdRoute,
     dashboardDashboardLayoutAdminReviewIndexRoute:
       dashboardDashboardLayoutAdminReviewIndexRoute,
     dashboardDashboardLayoutBasicInfoIndexRoute:
@@ -574,6 +618,8 @@ const dashboardDashboardLayoutRouteChildren: dashboardDashboardLayoutRouteChildr
       dashboardDashboardLayoutGroupsIndexRoute,
     dashboardDashboardLayoutInputDemoIndexRoute:
       dashboardDashboardLayoutInputDemoIndexRoute,
+    dashboardDashboardLayoutMessengerIndexRoute:
+      dashboardDashboardLayoutMessengerIndexRoute,
     dashboardDashboardLayoutOperationsIndexRoute:
       dashboardDashboardLayoutOperationsIndexRoute,
     dashboardDashboardLayoutReportTitlesIndexRoute:

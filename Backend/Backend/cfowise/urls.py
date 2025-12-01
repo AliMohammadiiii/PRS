@@ -48,6 +48,10 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    # AI Agent APIs
+    path("api/ai/", include("ai_agent.urls")),
+    # UI Config APIs
+    path("api/", include("ui_config.urls")),
     # API router (PRS‑focused)
     path("api/", include(router.urls)),
 ]

@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     "attachments.apps.AttachmentsConfig",
     "approvals.apps.ApprovalsConfig",
     "prs_team_config.apps.PrsTeamConfigConfig",
+    "ai_agent.apps.AiAgentConfig",
+    "ui_config.apps.UiConfigConfig",
 ]
 
 MIDDLEWARE = [
@@ -334,3 +336,8 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # PRS Completion Email
 PRS_COMPLETION_EMAIL = os.environ.get("PRS_COMPLETION_EMAIL", "")
+
+# Messenger-Only Mode Configuration
+# Domains that should show messenger-only UX for non-admin users
+messenger_domains_str = os.environ.get("MESSENGER_ONLY_DOMAINS", "")
+MESSENGER_ONLY_DOMAINS = [domain.strip() for domain in messenger_domains_str.split(",") if domain.strip()] if messenger_domains_str else []
