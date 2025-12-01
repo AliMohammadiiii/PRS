@@ -21,14 +21,21 @@ const getApiBaseUrl = (env: Environment): string => {
     return envApiUrl;
   }
   
-  // Production uses relative URL based on base path
+  // Production uses relative URL based on base path.
+  // IMPORTANT: Endpoints in the code already include the `/api` prefix
+  // (e.g. `/api/auth/token/`), so the base URL MUST NOT also end with `/api`,
+  // otherwise we'll end up with `/api/api/...`.
+  //
+  // Examples:
+  // - PUBLIC_BASE_PATH = '/'      => apiBaseUrl = '/'
+  //   Final URL: '/api/auth/token/'
+  // - PUBLIC_BASE_PATH = '/PRS'   => apiBaseUrl = '/PRS'
+  //   Final URL: '/PRS/api/auth/token/'
   if (env === 'PROD') {
-    // If PUBLIC_BASE_PATH is set, use it for API base URL
-    // Otherwise default to / for root deployment
     const basePath = import.meta.env.PUBLIC_BASE_PATH || '/';
-    // Remove trailing slash and add /api
     const cleanBasePath = basePath.replace(/\/$/, '');
-    return cleanBasePath === '/' ? '/api' : `${cleanBasePath}/api`;
+    // If cleanBasePath is empty, we're at root, so use '/'
+    return cleanBasePath || '/';
   }
   
   // Development environments use environment variable or default
