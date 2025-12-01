@@ -17,7 +17,7 @@ export default function Providers({ children }: Readonly<{ children: ReactNode }
     ...faIR,
   };
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false}>
+    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false} storageKey={null}>
       <SPAThemeProvider dir="rtl" appColors={appColors} themeOptions={options}>
         <ThemeAlphaWrapper>
           <MessageProvider

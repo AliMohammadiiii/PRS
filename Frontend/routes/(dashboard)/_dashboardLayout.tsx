@@ -1,9 +1,10 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-import { Box, Grid } from 'injast-core/components';
+import { Box, Grid, Typography } from 'injast-core/components';
 import SideBar from './components/SideBar';
 import Header from './components/Header';
 import { defaultColors } from 'injast-core/constants';
 import { getAccessToken } from 'src/client/contexts/AuthContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export const Route = createFileRoute('/(dashboard)/_dashboardLayout')({
   beforeLoad: () => {
@@ -18,6 +19,37 @@ export const Route = createFileRoute('/(dashboard)/_dashboardLayout')({
 });
 
 function RouteComponent() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          width: '100%',
+          bgcolor: defaultColors.neutral[50],
+          px: 3,
+        }}
+      >
+        <Typography
+          variant="h6"
+          sx={{
+            textAlign: 'center',
+            color: 'neutral.main',
+            fontSize: '18px',
+            fontWeight: 500,
+            lineHeight: 1.6,
+          }}
+        >
+          برای استفاده از اپلیکیشن لطفا از لپ‌تاپ استفاده کنید
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
     <Grid container sx={{ height: '100%' }}>
       <Grid size={2} sx={{ height: '100%' }}>

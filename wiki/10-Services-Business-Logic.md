@@ -551,3 +551,4 @@ def approve_request(request_id, user_id):
 - [Request Lifecycle](16-Request-Lifecycle.md) - Lifecycle management
 - [Backend Overview](07-Backend-Overview.md) - Backend structure
 
+

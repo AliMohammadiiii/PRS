@@ -8,6 +8,7 @@
 @layer base {
   html {
     direction: rtl;
+    color-scheme: light;
   }
 
   html,
@@ -15,12 +16,17 @@
     max-width: 100vw;
     overflow-x: hidden;
     direction: rtl;
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #111827;
   }
 
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-family: 'IRANYekanXFaNum', Arial, sans-serif;
+    background-color: #ffffff !important;
+    color: #111827 !important;
   }
 
   @font-face {
@@ -136,44 +142,6 @@
 
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 }
 
 @layer base {
@@ -183,6 +151,8 @@
 
   body {
     @apply bg-background text-foreground;
+    background-color: #ffffff !important;
+    color: #111827 !important;
   }
 
   :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
@@ -203,4 +173,539 @@
   .app-datagrid__cell--dir-ltr {
     direction: ltr;
   }
+}
+
+/* Force light mode - override any prefers-color-scheme media queries */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light !important;
+  }
+  
+  html,
+  body {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+  
+  /* Force MUI components to light mode */
+  .MuiButton-root,
+  .MuiTextField-root,
+  .MuiInputBase-root,
+  .MuiInputLabel-root,
+  .MuiOutlinedInput-root,
+  .MuiFilledInput-root,
+  .MuiInput-root {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+  
+  .MuiInputBase-input {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+  
+  .MuiInputLabel-root {
+    color: #4F545E !important;
+  }
+  
+  /* Force all MUI DataGrid/Table components to light mode */
+  .MuiDataGrid-root,
+  .MuiDataGrid-main,
+  .MuiDataGrid-columnHeaders,
+  .MuiDataGrid-row,
+  .MuiDataGrid-cell,
+  .MuiTable-root,
+  .MuiTableHead-root,
+  .MuiTableBody-root,
+  .MuiTableRow-root,
+  .MuiTableCell-root {
+    background-color: #ffffff !important;
+    color: #242933 !important;
+  }
+  
+  /* Force all MUI Paper/Card/Dialog components to light mode */
+  .MuiPaper-root,
+  .MuiCard-root,
+  .MuiDialog-paper,
+  .MuiMenu-paper,
+  .MuiPopover-paper,
+  .MuiDrawer-paper {
+    background-color: #ffffff !important;
+  }
+  
+  /* Force all MUI interactive components to light mode */
+  .MuiMenuItem-root,
+  .MuiListItem-root,
+  .MuiSelect-root,
+  .MuiAutocomplete-option {
+    background-color: #ffffff !important;
+    color: #242933 !important;
+  }
+}
+
+/* Explicitly force light mode for all elements */
+* {
+  color-scheme: light !important;
+}
+
+/* Force MUI components to use light mode colors globally */
+.MuiButton-root {
+  background-color: transparent !important;
+}
+
+.MuiButton-contained {
+  background-color: #1DBF98 !important;
+  color: #ffffff !important;
+}
+
+.MuiTextField-root .MuiInputBase-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTextField-root .MuiInputBase-input {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTextField-root .MuiInputLabel-root {
+  color: #4F545E !important;
+}
+
+.MuiOutlinedInput-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline {
+  border-color: #D6D9DF !important;
+}
+
+.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #4F545E !important;
+}
+
+.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #1DBF98 !important;
+}
+
+/* Force MUI DataGrid/Table components to light mode */
+.MuiDataGrid-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+  border-color: #D6D9DF !important;
+}
+
+.MuiDataGrid-main {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDataGrid-container--top,
+.MuiDataGrid-container--bottom {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDataGrid-columnHeaders {
+  background-color: #F4F6FA !important;
+  color: #242933 !important;
+  border-bottom-color: #D6D9DF !important;
+}
+
+.MuiDataGrid-columnHeader {
+  background-color: #F4F6FA !important;
+  color: #242933 !important;
+}
+
+.MuiDataGrid-columnHeaderTitle {
+  color: #242933 !important;
+  font-weight: 500 !important;
+}
+
+.MuiDataGrid-row {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDataGrid-row:nth-of-type(even) {
+  background-color: #FAFBFC !important;
+}
+
+.MuiDataGrid-row:hover {
+  background-color: #F4F6FA !important;
+}
+
+.MuiDataGrid-cell {
+  background-color: transparent !important;
+  color: #242933 !important;
+  border-bottom-color: #E5E7EA !important;
+}
+
+.MuiDataGrid-footerContainer {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+  border-top-color: #D6D9DF !important;
+}
+
+.MuiDataGrid-toolbarContainer {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDataGrid-menuIcon {
+  color: #242933 !important;
+}
+
+.MuiDataGrid-sortIcon {
+  color: #242933 !important;
+}
+
+.MuiDataGrid-filterIcon {
+  color: #242933 !important;
+}
+
+.MuiDataGrid-selectedRowCount {
+  color: #242933 !important;
+}
+
+/* Force MUI Paper/Card components to light mode */
+.MuiPaper-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiCard-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiCardContent-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI Dialog/Modal components to light mode */
+.MuiDialog-root {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.MuiDialog-container {
+  background-color: transparent !important;
+}
+
+.MuiDialog-paper {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDialogTitle-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDialogContent-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiDialogActions-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI Menu/Dropdown components to light mode */
+.MuiMenu-paper {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiMenu-list {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiMenuItem-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiMenuItem-root:hover {
+  background-color: #F4F6FA !important;
+}
+
+.MuiPopover-paper {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI Select components to light mode */
+.MuiSelect-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiSelect-select {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiSelect-icon {
+  color: #242933 !important;
+}
+
+/* Force MUI Tooltip components to light mode */
+.MuiTooltip-tooltip {
+  background-color: #242933 !important;
+  color: #ffffff !important;
+}
+
+.MuiTooltip-arrow {
+  color: #242933 !important;
+}
+
+/* Force MUI Chip/Badge components to light mode */
+.MuiChip-root {
+  background-color: #F4F6FA !important;
+  color: #242933 !important;
+}
+
+.MuiChip-label {
+  color: #242933 !important;
+}
+
+.MuiBadge-badge {
+  background-color: #1DBF98 !important;
+  color: #ffffff !important;
+}
+
+/* Force MUI Table components (non-DataGrid) to light mode */
+.MuiTable-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTableHead-root {
+  background-color: #F4F6FA !important;
+  color: #242933 !important;
+}
+
+.MuiTableBody-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTableRow-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTableRow-root:nth-of-type(even) {
+  background-color: #FAFBFC !important;
+}
+
+.MuiTableRow-root:hover {
+  background-color: #F4F6FA !important;
+}
+
+.MuiTableCell-root {
+  background-color: transparent !important;
+  color: #242933 !important;
+  border-bottom-color: #E5E7EA !important;
+}
+
+.MuiTableCell-head {
+  background-color: #F4F6FA !important;
+  color: #242933 !important;
+  font-weight: 500 !important;
+}
+
+/* Force MUI Drawer components to light mode */
+.MuiDrawer-paper {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI AppBar components to light mode */
+.MuiAppBar-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI List components to light mode */
+.MuiList-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiListItem-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiListItem-root:hover {
+  background-color: #F4F6FA !important;
+}
+
+.MuiListItemText-primary {
+  color: #242933 !important;
+}
+
+.MuiListItemText-secondary {
+  color: #4F545E !important;
+}
+
+/* Force MUI Divider components to light mode */
+.MuiDivider-root {
+  border-color: #D6D9DF !important;
+}
+
+/* Force MUI Typography components to light mode */
+.MuiTypography-root {
+  color: inherit !important;
+}
+
+/* Force MUI IconButton components to light mode */
+.MuiIconButton-root {
+  color: #242933 !important;
+}
+
+.MuiIconButton-root:hover {
+  background-color: rgba(36, 41, 51, 0.04) !important;
+}
+
+/* Force MUI Checkbox/Radio/Switch components to light mode */
+.MuiCheckbox-root {
+  color: #242933 !important;
+}
+
+.MuiRadio-root {
+  color: #242933 !important;
+}
+
+.MuiSwitch-root {
+  color: #242933 !important;
+}
+
+.MuiSwitch-track {
+  background-color: #D6D9DF !important;
+}
+
+.MuiSwitch-thumb {
+  background-color: #ffffff !important;
+}
+
+.MuiSwitch-switchBase.Mui-checked .MuiSwitch-track {
+  background-color: #1DBF98 !important;
+}
+
+.MuiSwitch-switchBase.Mui-checked .MuiSwitch-thumb {
+  background-color: #ffffff !important;
+}
+
+/* Force MUI Tabs components to light mode */
+.MuiTabs-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiTab-root {
+  color: #4F545E !important;
+}
+
+.MuiTab-root.Mui-selected {
+  color: #1DBF98 !important;
+}
+
+.MuiTabs-indicator {
+  background-color: #1DBF98 !important;
+}
+
+/* Force MUI Accordion components to light mode */
+.MuiAccordion-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAccordionSummary-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAccordionDetails-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+/* Force MUI Snackbar/Alert components to light mode */
+.MuiSnackbar-root {
+  background-color: transparent !important;
+}
+
+.MuiAlert-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAlert-standardSuccess {
+  background-color: #EDFCF6 !important;
+  color: #1B5E20 !important;
+}
+
+.MuiAlert-standardError {
+  background-color: #FEE !important;
+  color: #C00 !important;
+}
+
+.MuiAlert-standardWarning {
+  background-color: #FFF3E0 !important;
+  color: #E65100 !important;
+}
+
+.MuiAlert-standardInfo {
+  background-color: #E3F2FD !important;
+  color: #01579B !important;
+}
+
+/* Force MUI Autocomplete components to light mode */
+.MuiAutocomplete-root {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAutocomplete-paper {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAutocomplete-option {
+  background-color: #ffffff !important;
+  color: #242933 !important;
+}
+
+.MuiAutocomplete-option:hover {
+  background-color: #F4F6FA !important;
+}
+
+/* Force MUI Skeleton components to light mode */
+.MuiSkeleton-root {
+  background-color: #F4F6FA !important;
+}
+
+/* Force MUI Backdrop components to light mode */
+.MuiBackdrop-root {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Force MUI CircularProgress/LinearProgress components to light mode */
+.MuiCircularProgress-root {
+  color: #1DBF98 !important;
+}
+
+.MuiLinearProgress-root {
+  background-color: #F4F6FA !important;
+}
+
+.MuiLinearProgress-bar {
+  background-color: #1DBF98 !important;
 }

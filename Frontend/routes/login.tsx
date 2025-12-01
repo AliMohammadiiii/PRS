@@ -12,6 +12,7 @@ import { getAccessToken } from 'src/client/contexts/AuthContext';
 import { hasRole } from 'src/shared/utils/prsUtils';
 import type { UserMeResponse } from 'src/types/api/auth';
 import * as authApi from 'src/services/api/auth';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Logo - use specific login SVG logo from public assets
 // Use BASE_URL from Vite to handle subpath deployment
@@ -60,6 +61,7 @@ export const Route = createFileRoute('/login')({
 });
 
 function LoginPage() {
+  const isMobile = useIsMobile();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,6 +81,35 @@ function LoginPage() {
 
   const username = watch('username');
   const password = watch('password');
+
+  if (isMobile) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          width: '100%',
+          bgcolor: '#181D26',
+          px: 3,
+        }}
+      >
+        <Typography
+          variant="h6"
+          sx={{
+            textAlign: 'center',
+            color: 'white',
+            fontSize: '18px',
+            fontWeight: 500,
+            lineHeight: 1.6,
+          }}
+        >
+          برای استفاده از اپلیکیشن لطفا از لپ‌تاپ استفاده کنید
+        </Typography>
+      </Box>
+    );
+  }
 
   const onSubmit: SubmitHandler<FormData> = async (data) => {
     setError(null);
@@ -111,6 +142,10 @@ function LoginPage() {
         justifyContent: 'center',
         bgcolor: '#181D26',
         px: 3,
+        colorScheme: 'light',
+        '& *': {
+          colorScheme: 'light',
+        },
       }}
     >
       <Box
@@ -122,6 +157,19 @@ function LoginPage() {
           px: 4,
           py: 5,
           position: 'relative',
+          // Force light mode for all MUI components inside
+          '& .MuiButton-root': {
+            color: 'inherit',
+          },
+          '& .MuiTextField-root': {
+            '& .MuiInputBase-root': {
+              backgroundColor: 'white',
+              color: '#242933',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#4F545E',
+            },
+          },
         }}
       >
         {/* Logo */}

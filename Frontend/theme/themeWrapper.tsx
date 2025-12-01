@@ -25,23 +25,28 @@ function ThemeAlphaWrapper({ children }: { children: ReactNode }) {
   };
   
   // Create a new theme object that includes the alpha and getColor functions
+  // Force light mode to prevent dark mode from being applied
   const themeWithHelpers = useMemo(() => {
     const hasAlpha = (baseTheme as any).alpha && typeof (baseTheme as any).alpha === 'function';
     const hasGetColor = (baseTheme as any).getColor && typeof (baseTheme as any).getColor === 'function';
     const paletteHasGetColor = (baseTheme.palette as any)?.getColor && typeof (baseTheme.palette as any).getColor === 'function';
     
-    // If theme already has both functions, return as is
-    if (hasAlpha && hasGetColor && paletteHasGetColor) {
-      return baseTheme;
-    }
+    // Force light mode - override any dark mode settings
+    const forceLightMode = baseTheme.palette?.mode !== 'light';
     
-    // Create a new theme object that includes the missing functions
+    // Create a new theme object that includes the missing functions and forces light mode
     const enhancedTheme: Theme & { alpha?: typeof muiAlpha; getColor?: typeof getColor } = {
       ...baseTheme,
       palette: {
         ...baseTheme.palette,
+        mode: 'light', // Force light mode
       },
     };
+    
+    // If theme already has both functions and is in light mode, return as is
+    if (hasAlpha && hasGetColor && paletteHasGetColor && !forceLightMode) {
+      return baseTheme;
+    }
     
     if (!hasAlpha) {
       enhancedTheme.alpha = muiAlpha;

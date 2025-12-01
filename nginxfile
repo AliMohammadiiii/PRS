@@ -164,11 +164,11 @@ server {
     }
 
     # ============================================
-    # PRS Configuration (/PRS/)
+    # PRS Configuration (root /)
     # ============================================
 
     # PRS static files
-    location /PRS/static/ {
+    location /static/ {
         alias /opt/PRS/Backend/staticfiles/;
         expires 30d;
         add_header Cache-Control "public, immutable";
@@ -176,14 +176,14 @@ server {
     }
 
     # PRS media files
-    location /PRS/media/ {
+    location /media/ {
         alias /opt/PRS/media/;
         expires 7d;
         add_header Cache-Control "public";
     }
 
-    # PRS API endpoints
-    location /PRS/api/ {
+    # PRS API endpoints (root /api/)
+    location /api/ {
         # Handle CORS preflight requests
         if ($request_method = 'OPTIONS') {
             add_header 'Access-Control-Allow-Origin' '$http_origin' always;
@@ -198,8 +198,6 @@ server {
 
         limit_req zone=api_limit burst=20 nodelay;
 
-        rewrite ^/PRS/api/(.*)$ /api/$1 break;
-
         add_header 'Access-Control-Allow-Origin' '$http_origin' always;
         add_header 'Access-Control-Allow-Credentials' 'true' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
@@ -210,7 +208,6 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Script-Name /PRS;
         proxy_redirect off;
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
@@ -218,7 +215,7 @@ server {
     }
 
     # PRS authentication endpoints with stricter rate limiting
-    location ~ ^/PRS/api/auth/(token|change-password) {
+    location ~ ^/api/auth/(token|change-password) {
         if ($request_method = 'OPTIONS') {
             add_header 'Access-Control-Allow-Origin' '$http_origin' always;
             add_header 'Access-Control-Allow-Methods' 'POST, OPTIONS' always;
@@ -232,8 +229,6 @@ server {
 
         limit_req zone=auth_limit burst=5 nodelay;
 
-        rewrite ^/PRS/api/(.*)$ /api/$1 break;
-
         add_header 'Access-Control-Allow-Origin' '$http_origin' always;
         add_header 'Access-Control-Allow-Credentials' 'true' always;
         add_header 'Access-Control-Allow-Methods' 'POST, OPTIONS' always;
@@ -244,47 +239,35 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Script-Name /PRS;
         proxy_redirect off;
     }
 
     # PRS Django admin
-    location /PRS/admin/ {
-        rewrite ^/PRS/admin/(.*)$ /admin/$1 break;
-        rewrite ^/PRS/admin$ /admin/ break;
-
+    location /admin/ {
         proxy_pass http://prs_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Script-Name /PRS;
         proxy_redirect off;
     }
 
     # PRS health check endpoint
-    location /PRS/health {
-        rewrite ^/PRS/health$ /health break;
+    location /health {
         proxy_pass http://prs_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Script-Name /PRS;
         access_log off;
         add_header Content-Type application/json;
     }
 
-    # PRS frontend - redirect bare /PRS to /PRS/
-    location = /PRS {
-        return 301 /PRS/;
-    }
-
-    # PRS frontend SPA - serve static files and handle routing
-    location /PRS/ {
+    # PRS frontend SPA at root - serve static files and handle routing
+    location / {
         alias /opt/PRS/Frontend/dist/spa/;
         index index.html;
-        try_files $uri $uri/ /PRS/index.html;
+        try_files $uri $uri/ /index.html;
         expires 1h;
         add_header Cache-Control "public, must-revalidate";
     }
@@ -292,45 +275,6 @@ server {
     # ============================================
     # Root path - empty/default
     # ============================================
-
-    location = / {
-        return 200 "Welcome to innovation.nntc.io\n";
-        add_header Content-Type text/plain;
-    }
-
-    # Catch any /api/ requests that don't match /form/api/ and proxy them to Django
-    # This prevents nginx from trying to serve /api/ as static files
-    # This is a fallback for old frontend builds that might call /api/ directly
-    location /api/ {
-        # Handle CORS preflight requests
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' '$http_origin' always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Accept, Accept-Encoding, Authorization, Content-Type, DNT, Origin, User-Agent, X-CSRFToken, X-Requested-With' always;
-            add_header 'Access-Control-Allow-Credentials' 'true' always;
-            add_header 'Access-Control-Max-Age' 1728000 always;
-            add_header 'Content-Type' 'text/plain; charset=utf-8' always;
-            add_header 'Content-Length' 0 always;
-            return 204;
-        }
-
-        add_header 'Access-Control-Allow-Origin' '$http_origin' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Accept, Accept-Encoding, Authorization, Content-Type, DNT, Origin, User-Agent, X-CSRFToken, X-Requested-With' always;
-
-        proxy_pass http://django_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_request_buffering on;
-        proxy_redirect off;
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
 
     # ============================================
     # Formapp Configuration (/form/)

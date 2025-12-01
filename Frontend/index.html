@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="fa-IR" dir="rtl">
+<html lang="fa-IR" dir="rtl" style="color-scheme: light;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/png" href="/Favicon.png" />
     <title>PRS</title>
   </head>
@@ -12,17 +13,53 @@
 
     <!-- Force light mode - prevent dark class from being added -->
     <script>
-      // Remove dark class if it exists and prevent it from being added
-      document.documentElement.classList.remove('dark');
-      const observer = new MutationObserver(() => {
-        if (document.documentElement.classList.contains('dark')) {
+      (function() {
+        // Immediately remove dark class from html and body
+        function removeDarkClass() {
           document.documentElement.classList.remove('dark');
+          document.body.classList.remove('dark');
         }
-      });
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class']
-      });
+        
+        // Remove immediately
+        removeDarkClass();
+        
+        // Set up aggressive monitoring with MutationObserver
+        const observer = new MutationObserver(function(mutations) {
+          let shouldRemove = false;
+          mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+              if (document.documentElement.classList.contains('dark') || 
+                  document.body.classList.contains('dark')) {
+                shouldRemove = true;
+              }
+            }
+          });
+          if (shouldRemove) {
+            removeDarkClass();
+          }
+        });
+        
+        // Observe both html and body elements
+        observer.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['class'],
+          subtree: false
+        });
+        
+        observer.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class'],
+          subtree: false
+        });
+        
+        // Also run on DOMContentLoaded as a safeguard
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', removeDarkClass);
+        }
+        
+        // Run periodically as a final safeguard
+        setInterval(removeDarkClass, 100);
+      })();
     </script>
 
     <script type="module" src="/client/main.tsx"></script>
