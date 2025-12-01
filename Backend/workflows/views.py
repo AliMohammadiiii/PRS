@@ -203,8 +203,11 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         # Update steps if provided
         steps_data = request.data.get('steps')
         if steps_data is not None:
-            # Deactivate all existing steps
-            WorkflowStep.objects.filter(workflow=instance).update(is_active=False)
+            # Delete all existing steps and their approvers (CASCADE will handle approvers)
+            # We need to delete because unique_together constraint on (workflow, step_order)
+            # doesn't consider is_active, so deactivated steps would still conflict
+            existing_steps = WorkflowStep.objects.filter(workflow=instance)
+            existing_steps.delete()
             
             # Create new steps
             for step_data in steps_data:
@@ -531,8 +534,11 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         
         # Update steps if provided
         if steps_data is not None and len(steps_data) > 0:
-            # Deactivate all existing steps
-            WorkflowTemplateStep.objects.filter(workflow_template=instance).update(is_active=False)
+            # Delete all existing steps and their approvers (CASCADE will handle approvers)
+            # We need to delete because unique_together constraint on (workflow_template, step_order)
+            # doesn't consider is_active, so deactivated steps would still conflict
+            existing_steps = WorkflowTemplateStep.objects.filter(workflow_template=instance)
+            existing_steps.delete()
             
             # Create new steps
             for step_data in steps_data:
