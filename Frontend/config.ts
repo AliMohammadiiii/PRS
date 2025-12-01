@@ -24,8 +24,8 @@ const getApiBaseUrl = (env: Environment): string => {
   // Production uses relative URL based on base path
   if (env === 'PROD') {
     // If PUBLIC_BASE_PATH is set, use it for API base URL
-    // Otherwise default to /PRS for backward compatibility
-    const basePath = import.meta.env.PUBLIC_BASE_PATH || '/PRS';
+    // Otherwise default to / for root deployment
+    const basePath = import.meta.env.PUBLIC_BASE_PATH || '/';
     // Remove trailing slash and add /api
     const cleanBasePath = basePath.replace(/\/$/, '');
     return cleanBasePath === '/' ? '/api' : `${cleanBasePath}/api`;
@@ -56,8 +56,8 @@ const configs: Record<Environment, Config> = {
     appLang: 'fa-IR',
   },
   PROD: {
-    // PRS can be deployed at root (/) or subpath (/PRS/)
-    // Base path is controlled by PUBLIC_BASE_PATH environment variable
+    // PRS is deployed at root (/)
+    // Base path can be overridden via PUBLIC_BASE_PATH environment variable
     // Endpoints already include /api prefix
     apiBaseUrl: getApiBaseUrl('PROD'),
     appName: 'PRS',

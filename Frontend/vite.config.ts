@@ -15,8 +15,8 @@ export default defineConfig(() => ({
     },
   },
   // Base path for deployment - can be set via PUBLIC_BASE_PATH env variable
-  // Defaults to /PRS/ in production for backward compatibility, or / for root deployment
-  base: process.env.PUBLIC_BASE_PATH || (process.env.NODE_ENV === "production" ? "/PRS/" : "/"),
+  // Defaults to / for root deployment
+  base: process.env.PUBLIC_BASE_PATH || "/",
   build: {
     outDir: "dist/spa",
     sourcemap: process.env.NODE_ENV === "production" ? "hidden" : true,

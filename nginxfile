@@ -957,6 +957,63 @@ server {
         add_header Content-Type application/json;
     }
 
+    # Redirect /PRS to root for backward compatibility
+    location = /PRS {
+        return 301 /;
+    }
+
+    location = /PRS/ {
+        return 301 /;
+    }
+
+    # Handle /PRS/assets/ requests - rewrite to /assets/ (for old builds)
+    location /PRS/assets/ {
+        alias /opt/PRS/Frontend/dist/spa/assets/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+        # Ensure proper MIME types
+        types {
+            application/javascript js mjs;
+            text/css css;
+            image/png png;
+            image/jpeg jpg jpeg;
+            image/svg+xml svg;
+            image/gif gif;
+            image/webp webp;
+            font/woff woff;
+            font/woff2 woff2;
+            font/ttf ttf;
+            font/otf otf;
+            font/eot eot;
+        }
+        default_type application/octet-stream;
+    }
+
+    # PRS assets (JS, CSS, images, fonts) - must come before root location
+    location /assets/ {
+        alias /opt/PRS/Frontend/dist/spa/assets/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+        # Ensure proper MIME types
+        types {
+            application/javascript js mjs;
+            text/css css;
+            image/png png;
+            image/jpeg jpg jpeg;
+            image/svg+xml svg;
+            image/gif gif;
+            image/webp webp;
+            font/woff woff;
+            font/woff2 woff2;
+            font/ttf ttf;
+            font/otf otf;
+            font/eot eot;
+        }
+        default_type application/octet-stream;
+    }
+
     # PRS frontend SPA - serve at root
     location / {
         alias /opt/PRS/Frontend/dist/spa/;

@@ -6,13 +6,13 @@ import Providers from "../providers";
 
 // Create a new router instance
 // Base path can be set via PUBLIC_BASE_PATH environment variable
-// Defaults to /PRS in production for backward compatibility, or / for root deployment
+// Defaults to / for root deployment
 const getBasePath = (): string => {
   if (import.meta.env.PUBLIC_BASE_PATH) {
     // Remove trailing slash if present
     return import.meta.env.PUBLIC_BASE_PATH.replace(/\/$/, '') || '/';
   }
-  return import.meta.env.PROD ? '/PRS' : '/';
+  return '/';
 };
 
 const basepath = getBasePath();
