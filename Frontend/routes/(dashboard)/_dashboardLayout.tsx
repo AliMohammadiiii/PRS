@@ -30,7 +30,7 @@ function RouteComponent() {
           justifyContent: 'center',
           height: '100vh',
           width: '100%',
-          bgcolor: defaultColors.neutral[50],
+          bgcolor: 'white',
           px: 3,
         }}
       >
@@ -38,7 +38,7 @@ function RouteComponent() {
           variant="h6"
           sx={{
             textAlign: 'center',
-            color: 'neutral.main',
+            color: '#242933',
             fontSize: '18px',
             fontWeight: 500,
             lineHeight: 1.6,

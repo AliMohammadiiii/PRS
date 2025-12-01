@@ -91,7 +91,7 @@ function LoginPage() {
           justifyContent: 'center',
           height: '100vh',
           width: '100%',
-          bgcolor: '#181D26',
+          bgcolor: 'white',
           px: 3,
         }}
       >
@@ -99,7 +99,7 @@ function LoginPage() {
           variant="h6"
           sx={{
             textAlign: 'center',
-            color: 'white',
+            color: '#242933',
             fontSize: '18px',
             fontWeight: 500,
             lineHeight: 1.6,
