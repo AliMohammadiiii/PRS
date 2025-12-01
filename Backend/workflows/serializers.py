@@ -234,6 +234,33 @@ class WorkflowTemplateStepMinimalSerializer(serializers.ModelSerializer):
         ]
 
 
+class WorkflowTemplateStepCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating workflow template steps"""
+    role_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        write_only=True,
+        required=False,
+        help_text='List of COMPANY_ROLE lookup IDs to assign as approver roles for this step'
+    )
+    
+    class Meta:
+        model = WorkflowTemplateStep
+        fields = [
+            'id',
+            'step_name',
+            'step_order',
+            'is_finance_review',
+            'role_ids',
+        ]
+        read_only_fields = ['id']
+    
+    def validate_step_order(self, value):
+        """Ensure step order is positive"""
+        if value < 1:
+            raise serializers.ValidationError('Step order must be at least 1.')
+        return value
+
+
 class WorkflowTemplateSerializer(serializers.ModelSerializer):
     """Base serializer for workflow templates"""
     
@@ -274,7 +301,7 @@ class WorkflowTemplateCreateSerializer(serializers.ModelSerializer):
 
 class WorkflowTemplateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating workflow templates"""
-    steps = WorkflowTemplateStepSerializer(many=True, required=False, read_only=True)
+    steps = WorkflowTemplateStepCreateSerializer(many=True, required=False, write_only=True)
     
     class Meta:
         model = WorkflowTemplate

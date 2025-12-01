@@ -470,5 +470,67 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
             # Create, update, delete require admin permissions
             permission_classes = [IsSystemAdmin | IsWorkflowAdmin]
         return [permission() for permission in permission_classes]
+    
+    @extend_schema(
+        summary="Update a workflow template",
+        description="Updates a workflow template including its steps.",
+        request=WorkflowTemplateUpdateSerializer,
+        responses={
+            200: WorkflowTemplateDetailSerializer,
+            400: {'description': 'Validation error'},
+        },
+    )
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        """Update workflow template - handle steps if provided"""
+        instance = self.get_object()
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+        serializer.is_valid(raise_exception=True)
+        
+        # Update name and description
+        if 'name' in serializer.validated_data:
+            instance.name = serializer.validated_data['name']
+        if 'description' in serializer.validated_data:
+            instance.description = serializer.validated_data['description']
+        instance.save()
+        
+        # Update steps if provided
+        steps_data = request.data.get('steps')
+        if steps_data is not None:
+            # Deactivate all existing steps
+            WorkflowTemplateStep.objects.filter(workflow_template=instance).update(is_active=False)
+            
+            # Create new steps
+            for step_data in steps_data:
+                step = WorkflowTemplateStep.objects.create(
+                    workflow_template=instance,
+                    step_name=step_data['step_name'],
+                    step_order=step_data['step_order'],
+                    is_finance_review=step_data.get('is_finance_review', False)
+                )
+                
+                # Assign approver roles (COMPANY_ROLE lookups)
+                role_ids = step_data.get('role_ids', [])
+                for role_id in role_ids:
+                    try:
+                        role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
+                        WorkflowTemplateStepApprover.objects.create(
+                            step=step,
+                            role=role,
+                            is_active=True
+                        )
+                    except Lookup.DoesNotExist:
+                        continue
+            
+            # Validate workflow template structure (at most one finance review step).
+            steps = WorkflowTemplateStep.objects.filter(workflow_template=instance, is_active=True)
+            finance_steps = steps.filter(is_finance_review=True)
+            if finance_steps.count() > 1:
+                raise ValidationError('Workflow template cannot have more than one Finance Review step.')
+        
+        # Return updated workflow template
+        read_serializer = WorkflowTemplateDetailSerializer(instance)
+        return Response(read_serializer.data, status=status.HTTP_200_OK)
 
 
