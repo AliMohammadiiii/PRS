@@ -33,6 +33,8 @@ from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
 from teams.models import Team
 from purchase_requests.models import PurchaseRequest
 from classifications.models import Lookup
+from workflows.utils import clone_workflow_template, detect_workflow_changes
+from prs_team_config.models import TeamPurchaseConfig
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
@@ -478,7 +480,7 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
     
     @extend_schema(
         summary="Update a workflow template",
-        description="Updates a workflow template including its steps.",
+        description="Updates a workflow template including its steps. Creates a new version when changes are detected.",
         request=WorkflowTemplateUpdateSerializer,
         responses={
             200: WorkflowTemplateDetailSerializer,
@@ -487,7 +489,7 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
     )
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        """Update workflow template - handle steps if provided"""
+        """Update workflow template - always creates new version when changes detected"""
         instance = self.get_object()
         
         # Extract steps data before passing to serializer
@@ -525,48 +527,91 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
         serializer.is_valid(raise_exception=True)
         
-        # Update name and description
-        if 'name' in serializer.validated_data:
-            instance.name = serializer.validated_data['name']
-        if 'description' in serializer.validated_data:
-            instance.description = serializer.validated_data['description']
-        instance.save()
+        # Check for changes that require versioning
+        needs_new_version = False
         
-        # Update steps if provided
+        # Check if name or description changed
+        if 'name' in serializer.validated_data:
+            new_name = serializer.validated_data['name']
+            if new_name != instance.name:
+                needs_new_version = True
+        if 'description' in serializer.validated_data:
+            new_description = serializer.validated_data.get('description')
+            if new_description != instance.description:
+                needs_new_version = True
+        
+        # Check if steps changed
         if steps_data is not None and len(steps_data) > 0:
-            # Delete all existing steps and their approvers (CASCADE will handle approvers)
-            # We need to delete because unique_together constraint on (workflow_template, step_order)
-            # doesn't consider is_active, so deactivated steps would still conflict
-            existing_steps = WorkflowTemplateStep.objects.filter(workflow_template=instance)
-            existing_steps.delete()
+            if detect_workflow_changes(instance, steps_data):
+                needs_new_version = True
+        
+        # If changes detected, create new version
+        if needs_new_version:
+            # Get the new name (if changed) or use existing
+            new_name = serializer.validated_data.get('name', instance.name)
+            new_description = serializer.validated_data.get('description', instance.description)
             
-            # Create new steps
-            for step_data in steps_data:
-                step = WorkflowTemplateStep.objects.create(
-                    workflow_template=instance,
-                    step_name=step_data['step_name'],
-                    step_order=step_data['step_order'],
-                    is_finance_review=step_data.get('is_finance_review', False)
-                )
+            # Clone the template to create a new version
+            new_template = clone_workflow_template(instance, new_name=new_name)
+            
+            # Update description if changed
+            if new_description != instance.description:
+                new_template.description = new_description
+                new_template.save()
+            
+            # Update steps if provided
+            if steps_data is not None and len(steps_data) > 0:
+                # Delete all existing steps and their approvers (CASCADE will handle approvers)
+                existing_steps = WorkflowTemplateStep.objects.filter(workflow_template=new_template)
+                existing_steps.delete()
                 
-                # Assign approver roles (COMPANY_ROLE lookups)
-                role_ids = step_data.get('role_ids', [])
-                for role_id in role_ids:
-                    try:
-                        role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
-                        WorkflowTemplateStepApprover.objects.create(
-                            step=step,
-                            role=role,
-                            is_active=True
-                        )
-                    except Lookup.DoesNotExist:
-                        continue
+                # Create new steps with the provided data
+                for step_data in steps_data:
+                    step = WorkflowTemplateStep.objects.create(
+                        workflow_template=new_template,
+                        step_name=step_data['step_name'],
+                        step_order=step_data['step_order'],
+                        is_finance_review=step_data.get('is_finance_review', False)
+                    )
+                    
+                    # Assign approver roles (COMPANY_ROLE lookups)
+                    role_ids = step_data.get('role_ids', [])
+                    for role_id in role_ids:
+                        try:
+                            role = Lookup.objects.get(id=role_id, is_active=True, type__code='COMPANY_ROLE')
+                            WorkflowTemplateStepApprover.objects.create(
+                                step=step,
+                                role=role,
+                                is_active=True
+                            )
+                        except Lookup.DoesNotExist:
+                            continue
+                
+                # Validate workflow template structure (at most one finance review step)
+                steps = WorkflowTemplateStep.objects.filter(workflow_template=new_template, is_active=True)
+                finance_steps = steps.filter(is_finance_review=True)
+                if finance_steps.count() > 1:
+                    raise ValidationError('Workflow template cannot have more than one Finance Review step.')
             
-            # Validate workflow template structure (at most one finance review step).
-            steps = WorkflowTemplateStep.objects.filter(workflow_template=instance, is_active=True)
-            finance_steps = steps.filter(is_finance_review=True)
-            if finance_steps.count() > 1:
-                raise ValidationError('Workflow template cannot have more than one Finance Review step.')
+            # Deactivate old template
+            instance.is_active = False
+            instance.save()
+            
+            # Update TeamPurchaseConfig entries to point to new template
+            TeamPurchaseConfig.objects.filter(
+                workflow_template=instance,
+                is_active=True
+            ).update(workflow_template=new_template)
+            
+            # Return new template
+            instance = new_template
+        else:
+            # No changes detected, update existing template (shouldn't happen often, but handle it)
+            if 'name' in serializer.validated_data:
+                instance.name = serializer.validated_data['name']
+            if 'description' in serializer.validated_data:
+                instance.description = serializer.validated_data['description']
+            instance.save()
         
         # Return updated workflow template
         read_serializer = WorkflowTemplateDetailSerializer(instance)

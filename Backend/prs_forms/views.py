@@ -20,6 +20,8 @@ from prs_forms.serializers import (
 )
 from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
 from purchase_requests.models import PurchaseRequest
+from prs_forms.utils import clone_form_template, detect_form_changes
+from prs_team_config.models import TeamPurchaseConfig
 
 
 class FormTemplateViewSet(viewsets.ModelViewSet):
@@ -168,7 +170,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     
     @extend_schema(
         summary="Update form template fields",
-        description="Updates a form template. If the template has active requests, creates a new version instead.",
+        description="Updates a form template. Always creates a new version when changes are detected.",
         request=FormTemplateUpdateSerializer,
         responses={
             200: FormTemplateDetailSerializer,
@@ -177,58 +179,59 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     )
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        """Update form template - creates new version if active requests exist"""
+        """Update form template - always creates new version when changes detected"""
         instance = self.get_object()
         
-        # Check if template has active requests
-        active_statuses = ['DRAFT', 'PENDING_APPROVAL', 'IN_REVIEW', 'REJECTED', 'RESUBMITTED', 
-                         'FULLY_APPROVED', 'FINANCE_REVIEW']
-        has_active_requests = PurchaseRequest.objects.filter(
-            form_template=instance,
-            is_active=True,
-            status__code__in=active_statuses
-        ).exists()
+        # Get fields data from request
+        fields_data = request.data.get('fields', [])
         
-        if has_active_requests and instance.is_active:
-            # Create new version instead of updating
-            # Deactivate old template
-            instance.is_active = False
-            instance.save()
+        # Check for changes that require versioning
+        needs_new_version = False
+        
+        # Check if fields changed
+        if fields_data:
+            if detect_form_changes(instance, fields_data):
+                needs_new_version = True
+        
+        # If changes detected, create new version
+        if needs_new_version:
+            # Clone the template to create a new version
+            new_template = clone_form_template(instance, created_by=request.user)
             
-            # Create new version
-            max_version = FormTemplate.objects.filter(name=instance.name).aggregate(
-                max_ver=Max('version_number')
-            )['max_ver'] or 0
-            version_number = max_version + 1
+            # Delete existing fields from cloned template (they were copied)
+            new_template.fields.all().delete()
             
-            new_template = FormTemplate.objects.create(
-                name=instance.name,
-                version_number=version_number,
-                created_by=request.user,
-                is_active=True
-            )
-            
-            # Copy or create fields
-            fields_data = request.data.get('fields', [])
+            # Create new fields with the provided data
             for field_data in fields_data:
                 field_data['template'] = new_template.id
                 field_serializer = FormFieldCreateSerializer(data=field_data)
                 field_serializer.is_valid(raise_exception=True)
                 field_serializer.save(template=new_template)
             
+            # Deactivate old template
+            instance.is_active = False
+            instance.save()
+            
+            # Update TeamPurchaseConfig entries to point to new template
+            TeamPurchaseConfig.objects.filter(
+                form_template=instance,
+                is_active=True
+            ).update(form_template=new_template)
+            
+            # Return new template
             instance = new_template
         else:
-            # Update existing template directly
-            # Delete existing fields
-            instance.fields.all().delete()
-            
-            # Create new fields
-            fields_data = request.data.get('fields', [])
-            for field_data in fields_data:
-                field_data['template'] = instance.id
-                field_serializer = FormFieldCreateSerializer(data=field_data)
-                field_serializer.is_valid(raise_exception=True)
-                field_serializer.save(template=instance)
+            # No changes detected, update existing template (shouldn't happen often, but handle it)
+            if fields_data:
+                # Delete existing fields
+                instance.fields.all().delete()
+                
+                # Create new fields
+                for field_data in fields_data:
+                    field_data['template'] = instance.id
+                    field_serializer = FormFieldCreateSerializer(data=field_data)
+                    field_serializer.is_valid(raise_exception=True)
+                    field_serializer.save(template=instance)
         
         # Return updated template
         read_serializer = FormTemplateDetailSerializer(instance)
@@ -324,7 +327,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     
     @extend_schema(
         summary="Add a field to a template",
-        description="Adds a new field to a form template.",
+        description="Adds a new field to a form template. Creates a new version of the template.",
         request=FormFieldCreateSerializer,
         responses={
             201: FormFieldSerializer,
@@ -334,17 +337,33 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='fields')
     @transaction.atomic
     def add_field(self, request, pk=None):
-        """Add a field to a form template"""
-        template = self.get_object()
+        """Add a field to a form template - creates new version"""
+        old_template = self.get_object()
         
         # Check permissions
         if not (IsSystemAdmin().has_permission(request, self) or 
                 IsWorkflowAdmin().has_permission(request, self)):
             raise PermissionDenied('Only System Admins or Workflow Admins can add fields.')
         
+        # Validate the new field data
         serializer = FormFieldCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        field = serializer.save(template=template)
+        
+        # Create new version of template
+        new_template = clone_form_template(old_template, created_by=request.user)
+        
+        # Add the new field to the new template
+        field = serializer.save(template=new_template)
+        
+        # Deactivate old template
+        old_template.is_active = False
+        old_template.save()
+        
+        # Update TeamPurchaseConfig entries to point to new template
+        TeamPurchaseConfig.objects.filter(
+            form_template=old_template,
+            is_active=True
+        ).update(form_template=new_template)
         
         response_serializer = FormFieldSerializer(field)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
