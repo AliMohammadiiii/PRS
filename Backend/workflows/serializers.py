@@ -317,10 +317,12 @@ class WorkflowTemplateUpdateSerializer(serializers.ModelSerializer):
         # Create a copy of data without steps to avoid modifying the original
         # Handle both dict and QueryDict types
         if hasattr(data, 'copy'):
-            data_copy = data.copy()
+            # For QueryDict or mutable mapping, create a mutable copy
+            data_copy = dict(data.items()) if hasattr(data, 'items') else data.copy()
             if 'steps' in data_copy:
                 del data_copy['steps']
         else:
+            # For regular dict, create a new dict without 'steps'
             data_copy = {k: v for k, v in data.items() if k != 'steps'}
         return super().to_internal_value(data_copy)
 

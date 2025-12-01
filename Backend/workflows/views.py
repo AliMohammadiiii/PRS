@@ -488,22 +488,25 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         
         # Extract steps data before passing to serializer
-        steps_data = request.data.get('steps')
+        # Handle both QueryDict and regular dict
+        if hasattr(request.data, 'getlist'):
+            steps_data = request.data.getlist('steps') or request.data.get('steps')
+        else:
+            steps_data = request.data.get('steps')
         
-        # Create a copy of request.data without steps for serializer validation
-        serializer_data = dict(request.data)
-        if 'steps' in serializer_data:
-            del serializer_data['steps']
+        # Ensure steps_data is a list or None
+        if steps_data is not None and not isinstance(steps_data, list):
+            steps_data = [steps_data] if steps_data else []
         
-        # Validate main serializer first (without steps)
-        serializer = self.get_serializer(instance, data=serializer_data, partial=kwargs.get('partial', False))
-        serializer.is_valid(raise_exception=True)
-        
-        # Validate steps separately if provided
-        if steps_data is not None:
-            # Validate each step using the step serializer
+        # Validate steps separately if provided (before main serializer validation)
+        if steps_data is not None and len(steps_data) > 0:
             step_errors = {}
             for idx, step_data in enumerate(steps_data):
+                # Ensure step_data is a dict
+                if not isinstance(step_data, dict):
+                    step_errors[idx] = {'non_field_errors': ['Invalid step data format. Expected an object.']}
+                    continue
+                    
                 step_serializer_instance = WorkflowTemplateStepCreateSerializer(data=step_data)
                 if not step_serializer_instance.is_valid():
                     step_errors[idx] = step_serializer_instance.errors
@@ -511,8 +514,13 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
             if step_errors:
                 # Return detailed validation errors for steps
                 raise SerializerValidationError({
-                    'steps': step_errors
+                    'steps': step_errors,
+                    'detail': 'Invalid step data provided.'
                 })
+        
+        # Validate main serializer (serializer's to_internal_value removes 'steps')
+        serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+        serializer.is_valid(raise_exception=True)
         
         # Update name and description
         if 'name' in serializer.validated_data:
@@ -522,7 +530,7 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         instance.save()
         
         # Update steps if provided
-        if steps_data is not None:
+        if steps_data is not None and len(steps_data) > 0:
             # Deactivate all existing steps
             WorkflowTemplateStep.objects.filter(workflow_template=instance).update(is_active=False)
             
