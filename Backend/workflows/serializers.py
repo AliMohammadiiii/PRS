@@ -301,7 +301,12 @@ class WorkflowTemplateCreateSerializer(serializers.ModelSerializer):
 
 class WorkflowTemplateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating workflow templates"""
-    steps = WorkflowTemplateStepCreateSerializer(many=True, required=False, write_only=True)
+    steps = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        write_only=True,
+        help_text='List of steps to update (validated separately in the view)'
+    )
     
     class Meta:
         model = WorkflowTemplate
@@ -312,6 +317,12 @@ class WorkflowTemplateUpdateSerializer(serializers.ModelSerializer):
             'steps',
         ]
         read_only_fields = ['id', 'version_number']
+    
+    def validate(self, attrs):
+        """Validate the serializer data"""
+        # Steps are validated separately in the view, so remove them from attrs
+        attrs.pop('steps', None)
+        return attrs
 
 
 class WorkflowTemplateListSerializer(serializers.ModelSerializer):

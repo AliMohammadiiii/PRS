@@ -25,6 +25,7 @@ from workflows.serializers import (
     WorkflowTemplateCreateSerializer,
     WorkflowTemplateUpdateSerializer,
     WorkflowTemplateStepSerializer,
+    WorkflowTemplateStepCreateSerializer,
     WorkflowTemplateStepApproverSerializer
 )
 from accounts.permissions import IsSystemAdmin, IsWorkflowAdmin
@@ -485,6 +486,15 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         """Update workflow template - handle steps if provided"""
         instance = self.get_object()
         
+        # Validate steps separately if provided
+        steps_data = request.data.get('steps')
+        if steps_data is not None:
+            # Validate each step using the step serializer
+            for step_data in steps_data:
+                step_serializer_instance = WorkflowTemplateStepCreateSerializer(data=step_data)
+                step_serializer_instance.is_valid(raise_exception=True)
+        
+        # Validate main serializer (steps will be removed in serializer.validate())
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
         serializer.is_valid(raise_exception=True)
         
@@ -496,7 +506,6 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         instance.save()
         
         # Update steps if provided
-        steps_data = request.data.get('steps')
         if steps_data is not None:
             # Deactivate all existing steps
             WorkflowTemplateStep.objects.filter(workflow_template=instance).update(is_active=False)
