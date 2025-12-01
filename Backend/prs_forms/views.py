@@ -185,8 +185,18 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         # Get fields data from request
         fields_data = request.data.get('fields', [])
         
+        # Check if ANY purchase requests exist using this template (any status)
+        has_any_requests = PurchaseRequest.objects.filter(
+            form_template=instance,
+            is_active=True
+        ).exists()
+        
         # Check for changes that require versioning
         needs_new_version = False
+        
+        # If any requests exist, always create a new version
+        if has_any_requests:
+            needs_new_version = True
         
         # Check if fields changed
         if fields_data:

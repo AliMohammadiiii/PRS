@@ -527,8 +527,18 @@ class WorkflowTemplateViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
         serializer.is_valid(raise_exception=True)
         
+        # Check if ANY purchase requests exist using this template (any status)
+        has_any_requests = PurchaseRequest.objects.filter(
+            workflow_template=instance,
+            is_active=True
+        ).exists()
+        
         # Check for changes that require versioning
         needs_new_version = False
+        
+        # If any requests exist, always create a new version
+        if has_any_requests:
+            needs_new_version = True
         
         # Check if name or description changed
         if 'name' in serializer.validated_data:
