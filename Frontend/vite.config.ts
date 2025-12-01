@@ -5,7 +5,7 @@ import { createServer } from "./server";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
     host: "::",
     port: 8080,
@@ -14,8 +14,9 @@ export default defineConfig(({ mode }) => ({
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],
     },
   },
-  // In production PRS is served from https://innovation.nntc.io/PRS/
-  base: process.env.NODE_ENV === "production" ? "/PRS/" : "/",
+  // Base path for deployment - can be set via PUBLIC_BASE_PATH env variable
+  // Defaults to /PRS/ in production for backward compatibility, or / for root deployment
+  base: process.env.PUBLIC_BASE_PATH || (process.env.NODE_ENV === "production" ? "/PRS/" : "/"),
   build: {
     outDir: "dist/spa",
     sourcemap: process.env.NODE_ENV === "production" ? "hidden" : true,
@@ -50,9 +51,7 @@ export default defineConfig(({ mode }) => ({
     target: "es2015",
   },
   plugins: [
-    react({
-      jsxRuntime: 'automatic',
-    }),
+    react(),
     TanStackRouterVite({
       routesDirectory: "./routes",
       generatedRouteTree: "./routes/routeTree.gen.ts",

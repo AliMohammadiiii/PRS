@@ -21,9 +21,14 @@ const getApiBaseUrl = (env: Environment): string => {
     return envApiUrl;
   }
   
-  // Production uses relative URL
+  // Production uses relative URL based on base path
   if (env === 'PROD') {
-    return '/PRS';
+    // If PUBLIC_BASE_PATH is set, use it for API base URL
+    // Otherwise default to /PRS for backward compatibility
+    const basePath = import.meta.env.PUBLIC_BASE_PATH || '/PRS';
+    // Remove trailing slash and add /api
+    const cleanBasePath = basePath.replace(/\/$/, '');
+    return cleanBasePath === '/' ? '/api' : `${cleanBasePath}/api`;
   }
   
   // Development environments use environment variable or default
@@ -51,7 +56,8 @@ const configs: Record<Environment, Config> = {
     appLang: 'fa-IR',
   },
   PROD: {
-    // PRS is deployed under https://innovation.nntc.io/PRS/
+    // PRS can be deployed at root (/) or subpath (/PRS/)
+    // Base path is controlled by PUBLIC_BASE_PATH environment variable
     // Endpoints already include /api prefix
     apiBaseUrl: getApiBaseUrl('PROD'),
     appName: 'PRS',
