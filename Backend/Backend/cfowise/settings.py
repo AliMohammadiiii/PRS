@@ -245,6 +245,39 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
+# CSRF Configuration
+# CSRF_TRUSTED_ORIGINS is required for Django 4.0+ to prevent CSRF errors
+# Format: ['https://example.com', 'http://localhost:8000']
+csrf_trusted_origins_str = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if csrf_trusted_origins_str:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins_str.split(",") if origin.strip()]
+elif DEBUG:
+    # In development, allow common localhost origins
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
+else:
+    # In production, CSRF_TRUSTED_ORIGINS should be set via environment variable
+    CSRF_TRUSTED_ORIGINS = []
+
+# CSRF Cookie Settings
+CSRF_COOKIE_NAME = "csrftoken"
+CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to access
+CSRF_USE_SESSIONS = False  # Use cookies (default)
+CSRF_COOKIE_SAMESITE = "Lax"  # Allows CSRF cookie to be sent in top-level navigations
+
+# Session Cookie Settings (for consistency with CSRF)
+SESSION_COOKIE_NAME = "sessionid"
+SESSION_COOKIE_SAMESITE = "Lax"
+
+# CSRF Cookie Path (for subpath deployment support)
+if FORCE_SCRIPT_NAME:
+    CSRF_COOKIE_PATH = FORCE_SCRIPT_NAME + "/"
+    SESSION_COOKIE_PATH = FORCE_SCRIPT_NAME + "/"
+
 # Security Settings (Production)
 if not DEBUG:
     # HTTPS Settings
@@ -267,6 +300,10 @@ if not DEBUG:
     DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
     FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
     DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+else:
+    # Development: allow insecure cookies for HTTP
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
 
 # Logging Configuration
 LOGGING = {
