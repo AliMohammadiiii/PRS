@@ -11,7 +11,6 @@ class CaseInsensitiveTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     def validate(self, attrs):
         username = attrs.get('username')
-        password = attrs.get('password')
         
         if username:
             # Perform case-insensitive username lookup
@@ -19,12 +18,15 @@ class CaseInsensitiveTokenObtainPairSerializer(TokenObtainPairSerializer):
             try:
                 user = User.objects.get(username__iexact=username)
                 # Update attrs with the actual username from database
+                # This ensures the parent class uses the correct case
                 attrs['username'] = user.username
             except User.DoesNotExist:
-                # If user not found, let the parent class handle the error
+                # If user not found (even case-insensitively), let parent handle the error
+                # Parent will raise AuthenticationFailed with standard message
                 pass
         
         # Call parent validation with the corrected username
+        # Parent class handles password verification and is_active check
         return super().validate(attrs)
 
 
