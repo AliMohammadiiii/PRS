@@ -1,6 +1,7 @@
 import { createApiRequest } from 'injast-core/libs';
 import { config } from 'src/config';
 import { getAccessToken, getRefreshToken, setAccessToken, clearTokens } from 'src/client/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 // Custom response rejected handler to prevent default redirect to /auth/login
 // This allows our custom interceptor to handle 401 errors instead
@@ -91,14 +92,20 @@ apiRequest.interceptors.response.use(
       isRefreshing = true;
 
       const refreshToken = getRefreshToken();
-      if (!refreshToken) {
-        clearTokens();
-        processQueue(error, null);
-        isRefreshing = false;
-        return Promise.reject(error);
-      }
-
       try {
+        if (!refreshToken) {
+          // No refresh token: session is clearly expired
+          clearTokens();
+          processQueue(error, null);
+          toast({
+            title: 'پایان جلسه کاربری',
+            description: 'زمان جلسه شما به پایان رسیده است. لطفاً دوباره وارد شوید.',
+            variant: 'destructive',
+          });
+          isRefreshing = false;
+          return Promise.reject(error);
+        }
+
         // Direct API call to avoid circular dependency
         // config.apiBaseUrl is the base (e.g., '/cfowise' or 'http://localhost:8000')
         // Endpoints include /api prefix, so we append '/api/auth/token/refresh/'
@@ -124,9 +131,15 @@ apiRequest.interceptors.response.use(
         processQueue(null, newAccessToken);
         isRefreshing = false;
         return apiRequest(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         clearTokens();
         processQueue(refreshError, null);
+        // Show a clear session-expired message instead of a silent logout
+        toast({
+          title: 'پایان جلسه کاربری',
+          description: 'جلسه شما منقضی شده است. لطفاً دوباره وارد شوید.',
+          variant: 'destructive',
+        });
         isRefreshing = false;
         return Promise.reject(refreshError);
       }
