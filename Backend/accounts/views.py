@@ -76,6 +76,25 @@ class UserViewSet(SoftDeleteModelViewSet):
         
         return qs.order_by('username')
 
+    def update(self, request, *args, **kwargs):
+        """
+        Prevent deactivation of admin users via generic update (PUT/PATCH).
+        Admin is defined as is_superuser or is_staff.
+        """
+        partial = kwargs.get('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        # Disallow changing admin users to inactive
+        if 'is_active' in serializer.validated_data:
+            new_is_active = serializer.validated_data['is_active']
+            if (instance.is_superuser or instance.is_staff) and new_is_active is False:
+                raise ValidationError('Admin users cannot be deactivated.')
+
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
     @extend_schema(
         summary="Deactivate a user",
         description="Deactivates a user. Deactivated users cannot login or be assigned as approvers. "
@@ -92,6 +111,10 @@ class UserViewSet(SoftDeleteModelViewSet):
     def deactivate(self, request, pk=None):
         """Deactivate a user"""
         user = self.get_object()
+
+        # Never allow deactivation of admin users (superuser or staff)
+        if user.is_superuser or user.is_staff:
+            raise ValidationError('Admin users cannot be deactivated.')
         
         # Check if user is assigned as an approver for any active workflow steps
         # with pending requests
@@ -118,9 +141,9 @@ class UserViewSet(SoftDeleteModelViewSet):
                     'that are pending approval. Reassign approvers before deactivating the user.'
                 )
         
-        # Deactivate the user
+        # Deactivate the user (non-admin only)
         user.is_active = False
-        user.save()
+        user.save(update_fields=['is_active', 'updated_at'])
         
         # Also deactivate all AccessScopes for this user
         AccessScope.objects.filter(user=user, is_active=True).update(is_active=False)
