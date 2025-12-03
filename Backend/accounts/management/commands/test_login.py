@@ -114,3 +114,4 @@ class Command(BaseCommand):
                 for issue in issues:
                     self.stdout.write(f'    • {issue}')
 
+

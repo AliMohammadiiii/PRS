@@ -1,4 +1,4 @@
-# Purchase Request System (PRS)
+# Purchase Request System (bpms)
 
 **Phase 1 – Product Requirements Document (PRD)**  
 **Version:** 1.4 (Enhanced)  

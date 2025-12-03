@@ -46,19 +46,19 @@ const getApiBaseUrl = (env: Environment): string => {
 const configs: Record<Environment, Config> = {
   LOCAL: {
     apiBaseUrl: getApiBaseUrl('LOCAL'),
-    appName: 'PRS (Local)',
+    appName: 'bpms (Local)',
     appVersion: '0.0.1-local',
     appLang: 'fa-IR',
   },
   DEV: {
     apiBaseUrl: getApiBaseUrl('DEV'),
-    appName: 'PRS (Dev)',
+    appName: 'bpms (Dev)',
     appVersion: '0.0.1-dev',
     appLang: 'fa-IR',
   },
   STAGE: {
     apiBaseUrl: getApiBaseUrl('STAGE'),
-    appName: 'PRS (Stage)',
+    appName: 'bpms (Stage)',
     appVersion: '0.0.1-stage',
     appLang: 'fa-IR',
   },
@@ -67,7 +67,7 @@ const configs: Record<Environment, Config> = {
     // Base path can be overridden via PUBLIC_BASE_PATH environment variable
     // Endpoints already include /api prefix
     apiBaseUrl: getApiBaseUrl('PROD'),
-    appName: 'PRS',
+    appName: 'bpms',
     appVersion: '1.0.0',
     appLang: 'fa-IR',
   },

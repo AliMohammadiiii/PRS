@@ -1,4 +1,4 @@
-# Purchase Request System (PRS) - Complete Documentation
+# Purchase Request System (bpms) - Complete Documentation
 
 Welcome to the comprehensive documentation for the Purchase Request System (PRS). This Wiki provides both high-level overview for stakeholders and detailed technical documentation for developers.
 

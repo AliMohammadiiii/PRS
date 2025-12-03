@@ -88,3 +88,4 @@ class Command(BaseCommand):
         if options['password']:
             self.stdout.write(f'  Password: {options["password"]}')
 
+
