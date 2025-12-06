@@ -12,19 +12,52 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
 # Basic
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 # Parse ALLOWED_HOSTS: check DJANGO_ALLOWED_HOSTS first, then ALLOWED_HOSTS, then default
 # Split by comma, strip whitespace, filter empty strings
 allowed_hosts_str = os.environ.get("DJANGO_ALLOWED_HOSTS") or os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(",") if host.strip()]
-
+ALLOWED_HOSTS = [
+       "bpms.nntc.io",
+       "www.bpms.nntc.io",
+       # existing hosts like "innovation.nntc.io", etc.
+   ]
 SECRET_KEY = os.environ.get("SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = "change-me-in-development"
     else:
         raise ValueError("SECRET_KEY environment variable must be set in production")
+def parse_database_url(url: str):
+    """
+    Minimal DATABASE_URL parser supporting postgres:// and sqlite://.
+    """
+    parsed = urlparse(url)
+    scheme = parsed.scheme
 
+    if scheme in ("postgres", "postgresql", "postgresql_psycopg2"):
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": parsed.path.lstrip("/"),
+            "USER": parsed.username or "",
+            "PASSWORD": parsed.password or "",
+            "HOST": parsed.hostname or "",
+            "PORT": parsed.port or "5432",
+        }
+
+    if scheme == "sqlite":
+        # sqlite:///path/to/db.sqlite3 or sqlite:///:memory:
+        path = parsed.path
+        if path in ("", "/", "/:memory:"):
+            name = ":memory:"
+        else:
+            name = path
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": name,
+        }
+
+    raise ValueError(f"Unsupported database scheme: {scheme}")
 # Applications
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -132,7 +165,21 @@ DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite
 DATABASES = {
     'default': _db_from_url(DATABASE_URL)
 }
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
+if DATABASE_URL:
+    # Use DATABASE_URL from .env (PostgreSQL in production)
+    DATABASES = {
+        "default": parse_database_url(DATABASE_URL)
+    }
+else:
+    # Fallback for local dev if no env is set
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 # Prevent SQLite in production
 if not DEBUG and DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     raise ValueError("SQLite database is not allowed in production. Please use PostgreSQL.")
@@ -260,8 +307,15 @@ elif DEBUG:
         "http://127.0.0.1:8080",
     ]
 else:
+    CSRF_TRUSTED_ORIGINS = [
+       "http://bpms.nntc.io",
+       "http://www.bpms.nntc.io",
+       "https://bpms.nntc.io",
+       "https://www.bpms.nntc.io",
+       # existing hosts like "innovation.nntc.io", etc.
+    ]
     # In production, CSRF_TRUSTED_ORIGINS should be set via environment variable
-    CSRF_TRUSTED_ORIGINS = []
+    #CSRF_TRUSTED_ORIGINS = []
 
 # CSRF Cookie Settings
 CSRF_COOKIE_NAME = "csrftoken"
