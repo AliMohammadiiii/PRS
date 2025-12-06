@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('attachments', '0003_add_approval_history_to_attachment'),
+        ('attachments', '0004_rename_attachments_approval_idx_attachments_approva_ccaaf2_idx_and_more'),
     ]
 
     operations = [
