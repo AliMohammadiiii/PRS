@@ -16,12 +16,12 @@ from accounts.serializers import CaseInsensitiveTokenObtainPairSerializer
 class RateLimitedTokenObtainPairView(TokenObtainPairView):
     """
     Rate-limited token obtain view with case-insensitive username support.
-    Limits to 5 attempts per 15 minutes per IP address in production.
+    Limits to 20 attempts per 15 minutes per IP address in production.
     In DEBUG mode, rate limiting is disabled.
     """
     serializer_class = CaseInsensitiveTokenObtainPairSerializer
     rate_limit_key = 'ip'
-    rate_limit_rate = '5/15m'
+    rate_limit_rate = '20/15m'
     
     def dispatch(self, request, *args, **kwargs):
         # Disable rate limiting entirely in DEBUG to avoid blocking dev/testing
@@ -35,18 +35,22 @@ class RateLimitedTokenObtainPairView(TokenObtainPairView):
                 method=['POST'],
                 increment=True
             ):
-                raise Throttled(detail='Too many login attempts. Please try again later.')
+                # 15 minutes = 900 seconds
+                raise Throttled(
+                    detail='Too many login attempts. Please try again in 15 minutes.',
+                    wait=900
+                )
         return super().dispatch(request, *args, **kwargs)
 
 
 class RateLimitedTokenRefreshView(TokenRefreshView):
     """
     Rate-limited token refresh view.
-    Limits to 10 attempts per 15 minutes per IP address in production.
+    Limits to 30 attempts per 15 minutes per IP address in production.
     In DEBUG mode, rate limiting is disabled.
     """
     rate_limit_key = 'ip'
-    rate_limit_rate = '10/15m'
+    rate_limit_rate = '30/15m'
     
     def dispatch(self, request, *args, **kwargs):
         if request.method == 'POST' and not getattr(settings, "DEBUG", False):
@@ -59,18 +63,22 @@ class RateLimitedTokenRefreshView(TokenRefreshView):
                 method=['POST'],
                 increment=True
             ):
-                raise Throttled(detail='Too many refresh attempts. Please try again later.')
+                # 15 minutes = 900 seconds
+                raise Throttled(
+                    detail='Too many refresh attempts. Please try again in 15 minutes.',
+                    wait=900
+                )
         return super().dispatch(request, *args, **kwargs)
 
 
 class RateLimitedTokenVerifyView(TokenVerifyView):
     """
     Rate-limited token verify view.
-    Limits to 20 attempts per 15 minutes per IP address in production.
+    Limits to 50 attempts per 15 minutes per IP address in production.
     In DEBUG mode, rate limiting is disabled.
     """
     rate_limit_key = 'ip'
-    rate_limit_rate = '20/15m'
+    rate_limit_rate = '50/15m'
     
     def dispatch(self, request, *args, **kwargs):
         if request.method == 'POST' and not getattr(settings, "DEBUG", False):
@@ -83,6 +91,10 @@ class RateLimitedTokenVerifyView(TokenVerifyView):
                 method=['POST'],
                 increment=True
             ):
-                raise Throttled(detail='Too many verify attempts. Please try again later.')
+                # 15 minutes = 900 seconds
+                raise Throttled(
+                    detail='Too many verify attempts. Please try again in 15 minutes.',
+                    wait=900
+                )
         return super().dispatch(request, *args, **kwargs)
 

@@ -93,11 +93,11 @@ export default function PrsAttachmentsPanel({
 
   const handleFileSelect = (file: File) => {
     // Validate file type
-    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx'];
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xlsx', 'xls'];
     const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
     
     if (!allowedExtensions.includes(fileExtension)) {
-      const errorMsg = 'فرمت فایل مجاز نیست. فرمت‌های مجاز: PDF, JPG, PNG, DOCX';
+      const errorMsg = 'فرمت فایل مجاز نیست. فرمت‌های مجاز: PDF, JPG, PNG, DOC, DOCX, XLSX, XLS';
       setError(errorMsg);
       onError?.(errorMsg);
       return;
@@ -323,7 +323,7 @@ export default function PrsAttachmentsPanel({
               type="file"
               style={{ display: 'none' }}
               onChange={handleFileInputChange}
-              accept=".pdf,.jpg,.jpeg,.png,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
               disabled={isUploading}
             />
             <Upload className="w-8 h-8" color={defaultColors.neutral[600]} style={{ margin: '0 auto 8px' }} />

@@ -18,7 +18,7 @@ import PrsDynamicForm from '@/components/prs/PrsDynamicForm';
 import PrsAttachmentsPanel from '@/components/prs/PrsAttachmentsPanel';
 import PrsHistoryPanel from '@/components/prs/PrsHistoryPanel';
 import { extractInitialValuesFromFieldValues } from '@/components/prs/fieldUtils';
-import { PurchaseRequest } from 'src/types/api/prs';
+import { PurchaseRequest, FormField, EffectiveTemplateResponse, FormTemplateResponse } from 'src/types/api/prs';
 import * as prsApi from 'src/services/api/prs';
 import logger from '@/lib/logger';
 import { useAuth } from 'src/client/contexts/AuthContext';
@@ -43,7 +43,9 @@ function PurchaseRequestDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [request, setRequest] = useState<PurchaseRequest | null>(null);
+  const [formFields, setFormFields] = useState<FormField[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
@@ -56,11 +58,57 @@ function PurchaseRequestDetailPage() {
   const [completeComment, setCompleteComment] = useState('');
   const [completeFiles, setCompleteFiles] = useState<File[]>([]);
 
+  // Load form template fields when request is loaded
+  const loadFormTemplate = useCallback(async (request: PurchaseRequest) => {
+    try {
+      setIsLoadingTemplate(true);
+      
+      // Try to load effective template first (team + purchase type -> form template + workflow template)
+      try {
+        const effective = await prsApi.getEffectiveTemplate(
+          request.team.id,
+          request.purchase_type.code
+        );
+        // Use fields from effective template
+        setFormFields(effective.form_template.fields);
+        logger.debug('Loaded effective template fields:', effective.form_template.fields.length);
+      } catch (templateErr: any) {
+        // Fall back to loading the form template the request was created with
+        // 404 is expected when effective template endpoint doesn't exist - silently handle
+        const isExpected404 = templateErr?.response?.status === 404;
+        if (!isExpected404) {
+          logger.warn('Error loading effective template, using fallback:', templateErr);
+        }
+        try {
+          const template = await prsApi.getTeamFormTemplate(request.team.id);
+          setFormFields(template.template.fields);
+          logger.debug('Loaded fallback template fields:', template.template.fields.length);
+        } catch (fallbackErr: any) {
+          logger.error('Error loading fallback template:', fallbackErr);
+          // If both fail, use fields from field_values as fallback
+          const fieldsFromValues = request.field_values.map((fv) => fv.field);
+          setFormFields(fieldsFromValues);
+          logger.warn('Using fields from field_values as last resort:', fieldsFromValues.length);
+        }
+      }
+    } catch (err: any) {
+      logger.error('Error loading form template:', err);
+      // Fallback: use fields from field_values
+      const fieldsFromValues = request.field_values.map((fv) => fv.field);
+      setFormFields(fieldsFromValues);
+    } finally {
+      setIsLoadingTemplate(false);
+    }
+  }, []);
+
   const loadRequest = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await prsApi.getPurchaseRequest(requestId);
       setRequest(data);
+      
+      // Load form template fields after request is loaded
+      await loadFormTemplate(data);
     } catch (err: any) {
       const errorMessage = extractErrorMessage(err);
       toast({
@@ -72,7 +120,7 @@ function PurchaseRequestDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [requestId]);
+  }, [requestId, loadFormTemplate]);
 
   useEffect(() => {
     loadRequest();
@@ -256,13 +304,6 @@ function PurchaseRequestDetailPage() {
     return extractInitialValuesFromFieldValues(request.field_values);
   };
 
-  // Get form fields from request (extract from field_values)
-  const getFormFields = () => {
-    if (!request) return [];
-    // Extract unique fields from field_values (fields are already in field_values)
-    return request.field_values.map((fv) => fv.field);
-  };
-
   if (isLoading) {
     return (
       <>
@@ -298,7 +339,6 @@ function PurchaseRequestDetailPage() {
     return null;
   }
 
-  const formFields = getFormFields();
   const fieldValues = getFieldValues();
 
   return (
@@ -567,7 +607,18 @@ function PurchaseRequestDetailPage() {
         </Box>
 
         {/* Field values */}
-        {formFields.length > 0 && (
+        {isLoadingTemplate ? (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h1" fontWeight={700} color="text.primary" sx={{ mb: 3 }}>
+              فیلدهای فرم
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </Box>
+          </Box>
+        ) : formFields.length > 0 ? (
           <Box sx={{ mb: 4 }}>
             <Typography variant="h1" fontWeight={700} color="text.primary" sx={{ mb: 3 }}>
               فیلدهای فرم
@@ -580,7 +631,7 @@ function PurchaseRequestDetailPage() {
               isEditable={false}
             />
           </Box>
-        )}
+        ) : null}
 
         {/* Attachments */}
         <PrsAttachmentsPanel
@@ -665,7 +716,7 @@ function PurchaseRequestDetailPage() {
             <input
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 setApproveFiles((prev) => [...prev, ...files]);
@@ -818,7 +869,7 @@ function PurchaseRequestDetailPage() {
             <input
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 setCompleteFiles((prev) => [...prev, ...files]);
@@ -961,7 +1012,7 @@ function PurchaseRequestDetailPage() {
             <input
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 setRejectFiles((prev) => [...prev, ...files]);

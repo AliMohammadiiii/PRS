@@ -1115,7 +1115,7 @@ function NewPurchaseRequestPage() {
             <input
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 setSubmitFiles((prev) => [...prev, ...files]);

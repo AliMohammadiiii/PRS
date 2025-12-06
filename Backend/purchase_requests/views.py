@@ -120,7 +120,7 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
         from attachments.models import Attachment
         from django.core.validators import FileExtensionValidator
         
-        allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'docx', 'xlsx', 'xls']
+        allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xlsx', 'xls']
         max_size = 10 * 1024 * 1024  # 10 MB
         
         for file_obj in files:
@@ -150,6 +150,7 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
                     'jpg': 'image/jpeg',
                     'jpeg': 'image/jpeg',
                     'png': 'image/png',
+                    'doc': 'application/msword',
                     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     'xls': 'application/vnd.ms-excel',
@@ -538,28 +539,77 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             is_authorized = True
         else:
             # Approvers (by role) at any step can download
-            from workflows.models import WorkflowStepApprover
+            from workflows.models import (
+                WorkflowStepApprover, WorkflowTemplateStepApprover,
+                WorkflowTemplateStep
+            )
 
             user_role_ids = AccessScope.objects.filter(
                 user=user,
                 team=purchase_request.team,
                 is_active=True,
-            ).values('role_id')
+            ).values_list('role_id', flat=True)
 
-            has_step_role = WorkflowStepApprover.objects.filter(
-                step__workflow__team=purchase_request.team,
-                is_active=True,
-                role_id__in=user_role_ids,
-            ).exists()
-
-            # Finance Reviewers can download
-            has_finance_role = False
-            if purchase_request.current_step and purchase_request.current_step.is_finance_review:
-                has_finance_role = WorkflowStepApprover.objects.filter(
-                    step=purchase_request.current_step,
+            # Check if user is an approver at any step (for both template and legacy workflows)
+            has_step_role = False
+            
+            # Check template-based workflow
+            if purchase_request.workflow_template:
+                has_step_role = WorkflowTemplateStepApprover.objects.filter(
+                    step__workflow_template=purchase_request.workflow_template,
                     is_active=True,
                     role_id__in=user_role_ids,
                 ).exists()
+            
+            # Check legacy workflow
+            if not has_step_role:
+                has_step_role = WorkflowStepApprover.objects.filter(
+                    step__workflow__team=purchase_request.team,
+                    is_active=True,
+                    role_id__in=user_role_ids,
+                ).exists()
+
+            # Finance Reviewers can download if request is in FULLY_APPROVED or FINANCE_REVIEW status
+            # According to PRD: Finance Reviewers can access all requests that have reached "Fully Approved" status
+            has_finance_role = False
+            status_code = purchase_request.status.code if purchase_request.status else None
+            
+            if status_code in ['FULLY_APPROVED', 'FINANCE_REVIEW']:
+                # Check template-based workflow finance step
+                if purchase_request.workflow_template:
+                    finance_step = WorkflowTemplateStep.objects.filter(
+                        workflow_template=purchase_request.workflow_template,
+                        is_finance_review=True,
+                        is_active=True,
+                    ).first()
+                    if finance_step:
+                        has_finance_role = WorkflowTemplateStepApprover.objects.filter(
+                            step=finance_step,
+                            is_active=True,
+                            role_id__in=user_role_ids,
+                        ).exists()
+                
+                # Check legacy workflow finance step
+                if not has_finance_role:
+                    from workflows.models import Workflow, WorkflowStep
+                    try:
+                        workflow = Workflow.objects.get(
+                            team=purchase_request.team,
+                            is_active=True
+                        )
+                        finance_step = WorkflowStep.objects.filter(
+                            workflow=workflow,
+                            is_finance_review=True,
+                            is_active=True,
+                        ).first()
+                        if finance_step:
+                            has_finance_role = WorkflowStepApprover.objects.filter(
+                                step=finance_step,
+                                is_active=True,
+                                role_id__in=user_role_ids,
+                            ).exists()
+                    except Workflow.DoesNotExist:
+                        pass
 
             if has_step_role or has_finance_role:
                 is_authorized = True

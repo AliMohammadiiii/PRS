@@ -115,3 +115,4 @@ class Command(BaseCommand):
                     self.stdout.write(f'    • {issue}')
 
 
+
