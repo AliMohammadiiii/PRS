@@ -61,7 +61,7 @@ class Attachment(BaseModel):
         FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xlsx', 'xls']),
     ])
     file_size = models.PositiveIntegerField(help_text='File size in bytes')
-    file_type = models.CharField(max_length=32, help_text='MIME type or file extension')
+    file_type = models.CharField(max_length=100, help_text='MIME type or file extension')
     
     # Metadata
     uploaded_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='uploaded_attachments')
